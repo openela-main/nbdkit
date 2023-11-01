@@ -1,0 +1,59 @@
+From 3c2879a38c299b725091cea45329879e3f46fc99 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 31 Aug 2021 11:23:27 +0100
+Subject: [PATCH] cow: Fix for qemu 6.1 which requires backing format
+
+The diffing example in the manual created a qcow2 file with a backing
+file but did not specify the backing format.  However qemu 6.1 now
+requires this and fails with:
+
+  qemu-img: cow-diff.qcow2: Backing file specified without backing format
+
+or:
+
+  qemu-img: Could not change the backing file to 'cow-base.img': backing format must be specified
+
+Fix the example by adding the -F option to the command line.
+
+Also there was a test of this rebasing sequence which failed, so this
+commit updates the test too.
+
+(cherry picked from commit 618290ef33ce13b75c1a79fea1f1ffb327b5ba07)
+---
+ filters/cow/nbdkit-cow-filter.pod | 4 ++--
+ tests/test-cow.sh                 | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/filters/cow/nbdkit-cow-filter.pod b/filters/cow/nbdkit-cow-filter.pod
+index 4d5ae856..510bdd40 100644
+--- a/filters/cow/nbdkit-cow-filter.pod
++++ b/filters/cow/nbdkit-cow-filter.pod
+@@ -101,8 +101,8 @@ At the end, disconnect the client.
+ Run these C<qemu-img> commands to construct a qcow2 file containing
+ the differences:
+ 
+- qemu-img create -f qcow2 -b nbd:localhost diff.qcow2
+- qemu-img rebase -b disk.img diff.qcow2
++ qemu-img create -F raw -b nbd:localhost -f qcow2 diff.qcow2
++ qemu-img rebase -F raw -b disk.img -f qcow2 diff.qcow2
+ 
+ F<diff.qcow2> now contains the differences between the base
+ (F<disk.img>) and the changes stored in nbdkit-cow-filter.  C<nbdkit>
+diff --git a/tests/test-cow.sh b/tests/test-cow.sh
+index 8772afd7..edc4c223 100755
+--- a/tests/test-cow.sh
++++ b/tests/test-cow.sh
+@@ -72,8 +72,8 @@ fi
+ # If we have qemu-img, try the hairy rebase operation documented
+ # in the nbdkit-cow-filter manual.
+ if qemu-img --version >/dev/null 2>&1; then
+-    qemu-img create -f qcow2 -b nbd:unix:$sock cow-diff.qcow2
+-    time qemu-img rebase -b cow-base.img cow-diff.qcow2
++    qemu-img create -F raw -b nbd:unix:$sock -f qcow2 cow-diff.qcow2
++    time qemu-img rebase -F raw -b cow-base.img -f qcow2 cow-diff.qcow2
+     qemu-img info cow-diff.qcow2
+ 
+     # This checks the file we created exists.
+-- 
+2.31.1
+

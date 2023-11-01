@@ -1,0 +1,82 @@
+From 99788909d9ec36e3210cf85976fe5b18da690ddd Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 4 Aug 2021 20:24:59 +0100
+Subject: [PATCH] cache, cow: Fix data corruption in zero and trim on unaligned
+ tail
+
+Commit eb6009b092 ("cache, cow: Reduce use of bounce-buffer") first
+introduced in nbdkit 1.14 added an optimization of the
+read-modify-write mechanism used for unaligned heads and tails when
+zeroing in the cache layer.
+
+Unfortunately the part applied to the tail contained a mistake: It
+zeroes the end of the buffer rather than the beginning.  This causes
+data corruption when you use the zero or trim function with an offset
+and count which is not aligned to the block size.
+
+Although the bug has been around for years, a recent change made it
+more likely to happen.  Commit c1905b0a28 ("cache, cow: Use a 64K
+block size by default") increased the default block size from 4K to
+64K.  Most filesystems use a 4K block size so operations like fstrim
+will make 4K-aligned requests, and with a 4K block size also in the
+cache or cow filter the unaligned case would never have been hit
+before.
+
+We can demonstrate the bug simply by filling a buffer with data
+(100000 bytes in the example), and then trimming that data, which
+ought to zero it out.
+
+Before this commit there is data visible after the trim:
+
+$ nbdkit --filter=cow data "0x21 * 100000" --run 'nbdsh -u $uri -c "h.trim(100000, 0)" ; nbdcopy $uri - | hexdump -C'
+00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00018000  21 21 21 21 21 21 21 21  21 21 21 21 21 21 21 21  |!!!!!!!!!!!!!!!!|
+*
+000186a0
+
+After this commit the trim completely clears the data:
+
+$ nbdkit --filter=cow data "0x21 * 100000" --run 'nbdsh -u $uri -c "h.trim(100000, 0)" ; nbdcopy $uri - | hexdump -C'
+00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+000186a0
+
+Thanks: Ming Xie for finding the bug
+Fixes: commit eb6009b092ae642ed25f133d487dd40ef7bf70f8
+(cherry picked from commit a0ae7b2158598ce48ac31706319007f716d01c87)
+(cherry picked from commit c0b15574647672cb5c48178333acdd07424692ef)
+---
+ filters/cache/cache.c | 2 +-
+ filters/cow/cow.c     | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/filters/cache/cache.c b/filters/cache/cache.c
+index 91dcc43d..0616cc7b 100644
+--- a/filters/cache/cache.c
++++ b/filters/cache/cache.c
+@@ -493,7 +493,7 @@ cache_zero (struct nbdkit_next_ops *next_ops, void *nxdata,
+     ACQUIRE_LOCK_FOR_CURRENT_SCOPE (&lock);
+     r = blk_read (next_ops, nxdata, blknum, block, err);
+     if (r != -1) {
+-      memset (&block[count], 0, blksize - count);
++      memset (block, 0, count);
+       r = blk_write (next_ops, nxdata, blknum, block, flags, err);
+     }
+     if (r == -1)
+diff --git a/filters/cow/cow.c b/filters/cow/cow.c
+index 51ca64a4..1cfcc4e7 100644
+--- a/filters/cow/cow.c
++++ b/filters/cow/cow.c
+@@ -419,7 +419,7 @@ cow_zero (struct nbdkit_next_ops *next_ops, void *nxdata,
+     ACQUIRE_LOCK_FOR_CURRENT_SCOPE (&lock);
+     r = blk_read (next_ops, nxdata, blknum, block, err);
+     if (r != -1) {
+-      memset (&block[count], 0, BLKSIZE - count);
++      memset (block, 0, count);
+       r = blk_write (blknum, block, err);
+     }
+     if (r == -1)
+-- 
+2.31.1
+

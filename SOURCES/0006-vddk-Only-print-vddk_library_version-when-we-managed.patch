@@ -1,0 +1,55 @@
+From b8b376cf39d97c9f523a9867612126088b43c523 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sat, 23 Oct 2021 19:50:52 +0100
+Subject: [PATCH] vddk: Only print vddk_library_version when we managed to load
+ the library
+
+Because --dump-plugin calls load_library (false) it won't fail if we
+didn't manage to load the library.  This results in library_version
+being 0, which we printed incorrectly.
+
+Resolve this problem by not printing the vddk_library_version entry in
+this case.
+
+Fixes: commit 8700649d147948897f3b97810a1dff37924bdd6e
+(cherry picked from commit a3fba12c3e9c2113009f556360ae0bd04c45f6bb)
+---
+ plugins/vddk/nbdkit-vddk-plugin.pod | 1 +
+ plugins/vddk/vddk.c                 | 9 ++++++++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/vddk/nbdkit-vddk-plugin.pod b/plugins/vddk/nbdkit-vddk-plugin.pod
+index 822b96be..c56faddc 100644
+--- a/plugins/vddk/nbdkit-vddk-plugin.pod
++++ b/plugins/vddk/nbdkit-vddk-plugin.pod
+@@ -420,6 +420,7 @@ by this build.
+ =item C<vddk_library_version=...>
+ 
+ The VDDK major library version: 5, 6, 7, ...
++If this is omitted it means the library could not be loaded.
+ 
+ =item C<vddk_dll=...>
+ 
+diff --git a/plugins/vddk/vddk.c b/plugins/vddk/vddk.c
+index 291283f4..96615749 100644
+--- a/plugins/vddk/vddk.c
++++ b/plugins/vddk/vddk.c
+@@ -482,7 +482,14 @@ vddk_dump_plugin (void)
+ 
+   printf ("vddk_default_libdir=%s\n", VDDK_LIBDIR);
+   printf ("vddk_has_nfchostport=1\n");
+-  printf ("vddk_library_version=%d\n", library_version);
++
++  /* Because load_library (false) we might not have loaded VDDK, in
++   * which case we didn't set library_version.  Note this cannot
++   * happen in the normal (non-debug-plugin) path because there we use
++   * load_library (true).
++   */
++  if (library_version > 0)
++    printf ("vddk_library_version=%d\n", library_version);
+ 
+ #if defined(HAVE_DLADDR)
+   /* It would be nice to print the version of VDDK from the shared
+-- 
+2.31.1
+
