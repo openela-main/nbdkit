@@ -1,0 +1,31 @@
+From e0e592775911ebe2178b04b4b20f95fea2f2fe9c Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 5 Jan 2023 16:05:33 +0000
+Subject: [PATCH] ssh: Remove left over comment
+
+This comment was left over from when I copied the libssh example code.
+It adds no value so remove it.
+
+(cherry picked from commit c93a8957efcc26652b31f5bc359dfd3c4019b4f8)
+---
+ plugins/ssh/ssh.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/plugins/ssh/ssh.c b/plugins/ssh/ssh.c
+index 6cf40c26..aaa7c2b9 100644
+--- a/plugins/ssh/ssh.c
++++ b/plugins/ssh/ssh.c
+@@ -356,10 +356,6 @@ authenticate (struct ssh_handle *h)
+     if (rc == SSH_AUTH_SUCCESS) return 0;
+   }
+ 
+-  /* Example code tries keyboard-interactive here, but we cannot use
+-   * that method from a server.
+-   */
+-
+   if (password != NULL && (method & SSH_AUTH_METHOD_PASSWORD)) {
+     rc = authenticate_password (h->session, password);
+     if (rc == SSH_AUTH_SUCCESS) return 0;
+-- 
+2.31.1
+

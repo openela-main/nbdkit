@@ -1,0 +1,95 @@
+From 3f74004478d3590840d7eba97a590b7ec954957f Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 2 Feb 2023 13:59:32 +0000
+Subject: [PATCH] curl: Enable multi-conn for read-only connections
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Comparing before and after this commit shows approximately double the
+performance.  In other tests this allowed us to download files from
+web servers at line speed.
+
+  Benchmark 1:  nbdkit -r curl file:/var/tmp/jammy-server-cloudimg-amd64.raw --run "nbdcopy -p \$uri null:"
+    Time (mean ± σ):     943.8 ms ±  18.8 ms    [User: 316.2 ms, System: 1029.7 ms]
+    Range (min … max):   923.7 ms … 989.2 ms    10 runs
+
+  Benchmark 2:  ~/d/nbdkit/nbdkit -r curl file:/var/tmp/jammy-server-cloudimg-amd64.raw --run "nbdcopy -p \$uri null:"
+    Time (mean ± σ):     455.0 ms ±   6.2 ms    [User: 542.2 ms, System: 1824.7 ms]
+    Range (min … max):   449.1 ms … 471.6 ms    10 runs
+
+  Summary
+    ' ~/d/nbdkit/nbdkit -r curl file:/var/tmp/jammy-server-cloudimg-amd64.raw --run "nbdcopy -p \$uri null:" ' ran
+      2.07 ± 0.05 times faster than ' nbdkit -r curl file:/var/tmp/jammy-server-cloudimg-amd64.raw --run "nbdcopy -p \$uri null:" '
+
+Multi-conn is enabled only when we know the connection is read-only:
+
+  $ ./nbdkit -r curl file:/var/tmp/jammy-server-cloudimg-amd64.raw --run ' nbdinfo $uri ' | grep can_multi_conn
+	can_multi_conn: true
+  $ ./nbdkit curl file:/var/tmp/jammy-server-cloudimg-amd64.raw --run ' nbdinfo $uri ' | grep can_multi_conn
+	can_multi_conn: false
+
+See also:
+https://listman.redhat.com/archives/libguestfs/2023-February/030581.html
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit bb0f93ad7b9de451874d0c54188bf69cd37c5409)
+---
+ plugins/curl/curl.c     | 14 ++++++++++++++
+ plugins/curl/curldefs.h |  1 +
+ 2 files changed, 15 insertions(+)
+
+diff --git a/plugins/curl/curl.c b/plugins/curl/curl.c
+index e89bea99..eeba5aa4 100644
+--- a/plugins/curl/curl.c
++++ b/plugins/curl/curl.c
+@@ -455,6 +455,7 @@ curl_open (int readonly)
+     nbdkit_error ("calloc: %m");
+     return NULL;
+   }
++  h->readonly = readonly;
+ 
+   h->c = curl_easy_init ();
+   if (h->c == NULL) {
+@@ -764,6 +765,18 @@ curl_get_size (void *handle)
+   return h->exportsize;
+ }
+ 
++/* Multi-conn is safe for read-only connections, but HTTP does not
++ * have any concept of flushing so we cannot use it for read-write
++ * connections.
++ */
++static int
++curl_can_multi_conn (void *handle)
++{
++  struct curl_handle *h = handle;
++
++  return !! h->readonly;
++}
++
+ /* NB: The terminology used by libcurl is confusing!
+  *
+  * WRITEFUNCTION / write_cb is used when reading from the remote server
+@@ -907,6 +920,7 @@ static struct nbdkit_plugin plugin = {
+   .open              = curl_open,
+   .close             = curl_close,
+   .get_size          = curl_get_size,
++  .can_multi_conn    = curl_can_multi_conn,
+   .pread             = curl_pread,
+   .pwrite            = curl_pwrite,
+ };
+diff --git a/plugins/curl/curldefs.h b/plugins/curl/curldefs.h
+index f3095f92..9d4949f3 100644
+--- a/plugins/curl/curldefs.h
++++ b/plugins/curl/curldefs.h
+@@ -64,6 +64,7 @@ extern const char *user_agent;
+ /* The per-connection handle. */
+ struct curl_handle {
+   CURL *c;
++  int readonly;
+   bool accept_range;
+   int64_t exportsize;
+   char errbuf[CURL_ERROR_SIZE];
+-- 
+2.31.1
+
