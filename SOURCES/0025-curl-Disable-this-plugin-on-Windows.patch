@@ -1,0 +1,57 @@
+From 852f23db007b13ca8e9e5548c3becbdc78e16601 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 1 Aug 2023 11:29:04 +0100
+Subject: [PATCH] curl: Disable this plugin on Windows
+
+There is no self pipe trick for Windows (or there is, but it would
+require substantial porting work).
+
+(cherry picked from commit 9b0759377f6779bbecc8647c026dcdac7f2ebd89)
+---
+ plugins/curl/Makefile.am | 5 ++++-
+ tests/Makefile.am        | 2 ++
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/curl/Makefile.am b/plugins/curl/Makefile.am
+index 7529fb2f..971365f1 100644
+--- a/plugins/curl/Makefile.am
++++ b/plugins/curl/Makefile.am
+@@ -34,6 +34,8 @@ include $(top_srcdir)/common-rules.mk
+ EXTRA_DIST = nbdkit-curl-plugin.pod
+ 
+ if HAVE_CURL
++# Disabled on Windows because no self-pipe.
++if !IS_WINDOWS
+ 
+ plugin_LTLIBRARIES = nbdkit-curl-plugin.la
+ 
+@@ -85,4 +87,5 @@ nbdkit-curl-plugin.1: nbdkit-curl-plugin.pod \
+ 
+ endif HAVE_POD
+ 
+-endif
++endif !IS_WINDOWS
++endif HAVE_CURL
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index f6c5ac9a..08514c7a 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -643,6 +643,7 @@ EXTRA_DIST += test-cdi.sh
+ # curl plugin test.
+ if HAVE_MKE2FS_WITH_D
+ if HAVE_CURL
++if !IS_WINDOWS
+ TESTS += \
+ 	test-curl-file.sh \
+ 	test-curl-header-script-fail.sh \
+@@ -749,6 +750,7 @@ test_curl_cookie_script_LDADD = \
+ 	$(LIBNBD_LIBS) \
+ 	$(NULL)
+ 
++endif !IS_WINDOWS
+ endif HAVE_CURL
+ endif HAVE_MKE2FS_WITH_D
+ 
+-- 
+2.39.3
+

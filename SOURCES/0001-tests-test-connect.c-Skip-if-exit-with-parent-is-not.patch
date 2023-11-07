@@ -1,0 +1,33 @@
+From 41775572a5beb8ae49287271af31264684b2bbe3 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 21 Jul 2023 19:00:31 +0100
+Subject: [PATCH] tests/test-connect.c: Skip if --exit-with-parent is not
+ supported
+
+Fixes: commit 933d7401ff623077ba43b4ef1e7f16a7864c5fde
+(cherry picked from commit 59664b8b146edcba0353de628528e0a2035b3ba7)
+---
+ tests/test-connect.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/tests/test-connect.c b/tests/test-connect.c
+index f463415b..d7118330 100644
+--- a/tests/test-connect.c
++++ b/tests/test-connect.c
+@@ -47,6 +47,13 @@ main (int argc, char *argv[])
+   struct nbd_handle *nbd;
+   int64_t size;
+ 
++  if (system ("nbdkit --exit-with-parent --version") != 0) {
++    printf ("%s: --exit-with-parent is not implemented on this platform, "
++            "skipping\n",
++            argv[0]);
++    exit (77);
++  }
++
+   nbd = nbd_create ();
+   if (nbd == NULL) {
+     fprintf (stderr, "%s\n", nbd_get_error ());
+-- 
+2.39.3
+

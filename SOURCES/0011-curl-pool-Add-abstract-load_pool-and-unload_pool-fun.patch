@@ -1,0 +1,82 @@
+From f14fbc9498f52661fd8b9c895144eb40bf8bcd64 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 25 Jul 2023 18:57:00 +0100
+Subject: [PATCH] curl: pool: Add abstract load_pool and unload_pool functions
+
+Simple code refactoring.
+
+(cherry picked from commit 93761b2abf4c5923a410a4f176ee66c690520a2c)
+---
+ plugins/curl/curl.c     |  4 +++-
+ plugins/curl/curldefs.h |  3 ++-
+ plugins/curl/pool.c     | 10 ++++++++--
+ 3 files changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/plugins/curl/curl.c b/plugins/curl/curl.c
+index 381433fd..3557fd53 100644
+--- a/plugins/curl/curl.c
++++ b/plugins/curl/curl.c
+@@ -103,6 +103,8 @@ curl_load (void)
+     nbdkit_error ("libcurl initialization failed: %d", (int) r);
+     exit (EXIT_FAILURE);
+   }
++
++  load_pool ();
+ }
+ 
+ static void
+@@ -116,7 +118,7 @@ curl_unload (void)
+   if (resolves)
+     curl_slist_free_all (resolves);
+   scripts_unload ();
+-  free_all_handles ();
++  unload_pool ();
+   curl_global_cleanup ();
+ }
+ 
+diff --git a/plugins/curl/curldefs.h b/plugins/curl/curldefs.h
+index 613cfed7..4506f3e1 100644
+--- a/plugins/curl/curldefs.h
++++ b/plugins/curl/curldefs.h
+@@ -122,9 +122,10 @@ struct curl_handle {
+ };
+ 
+ /* pool.c */
++extern void load_pool (void);
++extern void unload_pool (void);
+ extern struct curl_handle *get_handle (void);
+ extern void put_handle (struct curl_handle *ch);
+-extern void free_all_handles (void);
+ 
+ /* scripts.c */
+ extern int do_scripts (struct curl_handle *ch);
+diff --git a/plugins/curl/pool.c b/plugins/curl/pool.c
+index a6e2f9f5..f91cdf57 100644
+--- a/plugins/curl/pool.c
++++ b/plugins/curl/pool.c
+@@ -89,14 +89,20 @@ static curl_handle_list curl_handles = empty_vector;
+ static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+ static size_t in_use = 0, waiting = 0;
+ 
++/* Initialize pool structures. */
++void
++load_pool (void)
++{
++}
++
+ /* Close and free all handles in the pool. */
+ void
+-free_all_handles (void)
++unload_pool (void)
+ {
+   size_t i;
+ 
+   if (curl_debug_pool)
+-    nbdkit_debug ("free_all_handles: number of curl handles allocated: %zu",
++    nbdkit_debug ("unload_pool: number of curl handles allocated: %zu",
+                   curl_handles.len);
+ 
+   for (i = 0; i < curl_handles.len; ++i)
+-- 
+2.39.3
+

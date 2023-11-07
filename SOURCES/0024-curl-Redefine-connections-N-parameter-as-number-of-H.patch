@@ -1,0 +1,139 @@
+From d33cf724dccd014f854a90bb7341fd36f890bb01 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 28 Jul 2023 11:49:24 +0100
+Subject: [PATCH] curl: Redefine connections=<N> parameter as number of HTTP
+ connections
+
+Previously (nbdkit 1.34) this was the number of easy handles.  However
+it turns out that easy handles can open multiple HTTP connections, and
+in fact there's no good way to tell how many (and they are not
+shared).
+
+Now that we are using a curl multi, curl >= 7.30 provides a way to
+limit the total number of actual HTTP connections, so we should just
+use it.  This is closer to what I intended this parameter to mean.
+
+Also update the documentation to properly describe previous and
+current behaviour.
+
+Link: https://curl.se/mail/lib-2019-03/0102.html
+Link: https://curl.se/mail/lib-2019-12/0044.html
+Reviewed-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit 2bb03f898e49ec892070055b6975914642fa8c5c)
+---
+ plugins/curl/config.c               |  2 +-
+ plugins/curl/curldefs.h             |  3 +++
+ plugins/curl/nbdkit-curl-plugin.pod | 37 +++++++++++++++++++----------
+ plugins/curl/pool.c                 |  6 ++++-
+ 4 files changed, 34 insertions(+), 14 deletions(-)
+
+diff --git a/plugins/curl/config.c b/plugins/curl/config.c
+index ce82d5f9..a7501707 100644
+--- a/plugins/curl/config.c
++++ b/plugins/curl/config.c
+@@ -494,7 +494,7 @@ curl_config_complete (void)
+ const char *curl_config_help =
+   "cainfo=<CAINFO>            Path to Certificate Authority file.\n"
+   "capath=<CAPATH>            Path to directory with CA certificates.\n"
+-  "connections=<N>            Number of libcurl connections to use.\n"
++  "connections=<N>            Number of HTTP connections to use.\n"
+   "cookie=<COOKIE>            Set HTTP/HTTPS cookies.\n"
+   "cookiefile=                Enable cookie processing.\n"
+   "cookiefile=<FILENAME>      Read cookies from file.\n"
+diff --git a/plugins/curl/curldefs.h b/plugins/curl/curldefs.h
+index 6b158d85..73e7a3b4 100644
+--- a/plugins/curl/curldefs.h
++++ b/plugins/curl/curldefs.h
+@@ -50,6 +50,9 @@
+  * macro isn't present then Curl is very old.
+  */
+ #ifdef CURL_AT_LEAST_VERSION
++#if CURL_AT_LEAST_VERSION (7, 30, 0)
++#define HAVE_CURLMOPT_MAX_TOTAL_CONNECTIONS
++#endif
+ #if CURL_AT_LEAST_VERSION (7, 55, 0)
+ #define HAVE_CURLINFO_CONTENT_LENGTH_DOWNLOAD_T
+ #endif
+diff --git a/plugins/curl/nbdkit-curl-plugin.pod b/plugins/curl/nbdkit-curl-plugin.pod
+index 7784b553..9821f111 100644
+--- a/plugins/curl/nbdkit-curl-plugin.pod
++++ b/plugins/curl/nbdkit-curl-plugin.pod
+@@ -58,10 +58,10 @@ L<CURLOPT_CAPATH(3)> for more information.
+ 
+ (nbdkit E<ge> 1.34)
+ 
+-Open up to C<N> curl connections to the web server.  The default is 4.
+-Curl connections are shared between all NBD clients, so you may wish
+-to increase this if you expect many simultaneous NBD clients (or a
+-single client using many multi-conn connections).
++Open up to C<N> connections to the web server.  The default is 16.
++Connections are shared between all NBD clients, so you may wish to
++increase this if you expect many simultaneous NBD clients (or a single
++client using many multi-conn connections).
+ 
+ See L</NBD CONNECTIONS AND CURL HANDLES> below.
+ 
+@@ -397,15 +397,28 @@ user-agent header.
+ =head1 NBD CONNECTIONS AND CURL HANDLES
+ 
+ nbdkit E<le> 1.32 used a simple model where a new NBD connection would
+-create a new libcurl handle.  In practice this meant there was a
+-1-to-1 relationship between NBD connections and HTTP connections to
+-the remote web server (assuming http: or https: URL).
++create a new libcurl handle.  Since a libcurl handle maintains a small
++cache of connections, this meant that the number of HTTP connections
++would be a small multiple of the number of incoming NBD connections
++and the total would not be limited (assuming http: or https: URL).
+ 
+-nbdkit E<ge> 1.34 changed to using a fixed pool of libcurl handles
+-shared across all NBD connections.  You can control the maximum number
+-of curl handles in the pool with the C<connections> parameter (default
+-4).  Note that if there are more than 4 NBD connections, they will
+-share the 4 web server connections, unless you adjust C<connections>.
++nbdkit 1.34 changed to using a fixed pool of libcurl handles shared
++across all NBD connections.  You can control the maximum number of
++curl handles in the pool with the C<connections> parameter (default
++4).  Since each curl handle maintains a small cache of connections,
++this meant that the number of HTTP connections would be a small
++multiple of the C<connections> parameter.  If there are more than 4
++incoming NBD connections, they will contend for the libcurl handles,
++unless you adjust C<connections>.
++
++nbdkit E<ge> 1.36 changed again to use a curl multi handle
++(L<libcurl-multi(3)>).  Now the C<connections> parameter controls the
++maximum number of HTTP connections made to the remote server
++(L<CURLMOPT_MAX_TOTAL_CONNECTIONS(3)>).  This is more efficient
++especially with HTTP/2 and HTTP/3, where each HTTP connection can
++contain a very large number of streams (typically up to 100)
++multiplexed over one connection.  The default for C<connections> was
++raised to 16.
+ 
+ =head1 HEADER AND COOKIE SCRIPTS
+ 
+diff --git a/plugins/curl/pool.c b/plugins/curl/pool.c
+index 254951d1..7d44dfe5 100644
+--- a/plugins/curl/pool.c
++++ b/plugins/curl/pool.c
+@@ -79,7 +79,7 @@
+ /* Use '-D curl.pool=1' to debug handle pool. */
+ NBDKIT_DLL_PUBLIC int curl_debug_pool = 0;
+ 
+-unsigned connections = 4;
++unsigned connections = 16;
+ 
+ /* Pipe used to notify background thread that a command is pending in
+  * the queue.  A pointer to the 'struct command' is sent over the
+@@ -115,6 +115,10 @@ pool_get_ready (void)
+     return -1;
+   }
+ 
++#ifdef HAVE_CURLMOPT_MAX_TOTAL_CONNECTIONS
++  curl_multi_setopt(multi, CURLMOPT_MAX_TOTAL_CONNECTIONS, (long) connections);
++#endif
++
+   return 0;
+ }
+ 
+-- 
+2.39.3
+

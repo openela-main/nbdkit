@@ -1,0 +1,70 @@
+From 93a2c7321dc5ccd36368d50887cf239cfb883a72 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 21 Jul 2023 19:01:35 +0100
+Subject: [PATCH] tests: Use --exit-with-parent in the test framework
+
+Make sure nbdkit always exits, in case some other part of the test is
+killed.
+
+(cherry picked from commit c6299889e80217cfadf488a67961be9eb6d24e38)
+---
+ tests/Makefile.am |  2 ++
+ tests/test.c      | 22 +++++++++++++---------
+ 2 files changed, 15 insertions(+), 9 deletions(-)
+
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index e1087689..f6c5ac9a 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -594,6 +594,8 @@ EXTRA_DIST += \
+ check_LTLIBRARIES += libtest.la
+ libtest_la_SOURCES = test.c test.h
+ libtest_la_CFLAGS = $(WARNINGS_CFLAGS)
++libtest_la_CPPFLAGS = -I$(top_srcdir)/common/utils
++libtest_la_LIBADD = $(top_builddir)/common/utils/libutils.la
+ 
+ # Basic connection test.
+ LIBNBD_TESTS += test-connect
+diff --git a/tests/test.c b/tests/test.c
+index 67f69fab..6be10f12 100644
+--- a/tests/test.c
++++ b/tests/test.c
+@@ -50,6 +50,8 @@
+ #include <sys/wait.h>
+ #endif
+ 
++#include "exit-with-parent.h"
++
+ #include "test.h"
+ 
+ #ifndef WIN32
+@@ -161,15 +163,17 @@ test_start_nbdkit (const char *arg, ...)
+     const char *argv[MAX_ARGS+1];
+     va_list args;
+ 
+-    argv[0] = "nbdkit";
+-    argv[1] = "-U";
+-    argv[2] = kit->sockpath;
+-    argv[3] = "-P";
+-    argv[4] = kit->pidpath;
+-    argv[5] = "-f";
+-    argv[6] = "-v";
+-    argv[7] = arg;
+-    i = 8;
++    i = 0;
++    argv[i++] = "nbdkit";
++    argv[i++] = "-U";
++    argv[i++] = kit->sockpath;
++    argv[i++] = "-P";
++    argv[i++] = kit->pidpath;
++    argv[i++] = "-f";
++    argv[i++] = "-v";
++    if (can_exit_with_parent ())
++      argv[i++] = "--exit-with-parent";
++    argv[i++] = arg;
+ 
+     va_start (args, arg);
+     while ((p = va_arg (args, const char *)) != NULL) {
+-- 
+2.39.3
+

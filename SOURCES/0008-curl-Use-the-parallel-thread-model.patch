@@ -1,0 +1,80 @@
+From bfa0b1238f6318d06930ec4d389a27932fc90a16 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sat, 4 Feb 2023 12:34:57 +0000
+Subject: [PATCH] curl: Use the parallel thread model
+
+After previous changes, it is now safe to use the parallel thread
+model in this plugin.  The locking in pool.c protects a single curl
+handle from being used from multiple threads.
+
+An advantage of this is we can now combine the curl plugin with
+filters such as readahead and scan.
+
+This pessimizes some workloads and improves others.  See my earlier
+comments here:
+
+  https://listman.redhat.com/archives/libguestfs/2023-February/030610.html
+  https://listman.redhat.com/archives/libguestfs/2023-February/030618.html
+  https://listman.redhat.com/archives/libguestfs/2023-February/030619.html
+  https://listman.redhat.com/archives/libguestfs/2023-February/030620.html
+
+Tests below use this basic command:
+
+  $ time nbdkit -r -U - curl https://cloud.debian.org/images/cloud/bookworm/daily/latest/debian-12-generic-amd64-daily.qcow2 \
+         --run '$COPY $uri /var/tmp/out'
+
+where $COPY is either nbdcopy or qemu-img convert.
+
+Before this change:
+
+  nbdkit + nbdcopy           0m55.397s
+  nbdkit + qemu-img convert  [over 20 minutes]
+
+After this change:
+
+  nbdkit + nbdcopy           1m1.235s
+  nbdkit + qemu-img convert  6m3.262s
+  nbdkit --filter=readahead --filter=cache + qemu-img convert
+                             8m16.488s
+  nbdkit connections=8 + qemu-img convert
+                             3m48.502s
+
+Previously [see first link above] we noted that file: URLs are
+impacted, and indeed they are, with this command:
+
+  $ time nbdkit -r -U - curl file:/var/tmp/fedora-36.img \
+         --run 'nbdcopy --no-extents -p "$uri" null:'
+
+nearly doubling in run-time (0.78 -> 1.34).  However I think this may
+be a peculiarity of curl's handling of file.  (Use nbdkit-file-plugin
+instead).
+
+Note the fundamental issue here is still lack of multiconn support in
+qemu's NBD client.
+
+(cherry picked from commit f2163754860d041c4cb12dace90591c280eccae8)
+---
+ plugins/curl/curl.c | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/plugins/curl/curl.c b/plugins/curl/curl.c
+index 58ffb662..425f1d90 100644
+--- a/plugins/curl/curl.c
++++ b/plugins/curl/curl.c
+@@ -537,12 +537,7 @@ curl_close (void *handle)
+   free (h);
+ }
+ 
+-/* This plugin could support the parallel thread model.  It currently
+- * uses serialize_requests because parallel has the unfortunate effect
+- * of pessimising common workloads.  See:
+- * https://listman.redhat.com/archives/libguestfs/2023-February/030618.html
+- */
+-#define THREAD_MODEL NBDKIT_THREAD_MODEL_SERIALIZE_REQUESTS
++#define THREAD_MODEL NBDKIT_THREAD_MODEL_PARALLEL
+ 
+ /* Calls get_handle() ... put_handle() to get a handle for the length
+  * of the current scope.
+-- 
+2.39.3
+

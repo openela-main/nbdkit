@@ -1,0 +1,51 @@
+From 22590e0575e78c4fc754705b46d1458eeadefcf1 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 30 Jul 2023 16:45:38 +0100
+Subject: [PATCH] curl: Use _Atomic type to accumulate curl timings
+
+Because the global list of times is accessed in parallel by many
+threads, they must be accessed atomically.
+
+Fixes: commit 68dddbeb584fb9385915846d259563f74338ffe8
+(cherry picked from commit 4c527063336ccf14d286ef7db5766369e1b23845)
+---
+ plugins/curl/curldefs.h | 9 +++++++++
+ plugins/curl/times.c    | 2 +-
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/curl/curldefs.h b/plugins/curl/curldefs.h
+index 9169b256..1feba844 100644
+--- a/plugins/curl/curldefs.h
++++ b/plugins/curl/curldefs.h
+@@ -35,6 +35,15 @@
+ 
+ #include <stdbool.h>
+ 
++#ifdef HAVE_STDATOMIC_H
++#include <stdatomic.h>
++#else
++/* Some old platforms lack atomic types, but 32 bit ints are usually
++ * "atomic enough".
++ */
++#define _Atomic /**/
++#endif
++
+ #include "windows-compat.h"
+ 
+ /* Macro CURL_AT_LEAST_VERSION was added in 2015 (Curl 7.43) so if the
+diff --git a/plugins/curl/times.c b/plugins/curl/times.c
+index e752a0a9..23e2950b 100644
+--- a/plugins/curl/times.c
++++ b/plugins/curl/times.c
+@@ -54,7 +54,7 @@ static struct {
+   bool cumulative;
+   const char *name;
+   CURLINFO info;
+-  curl_off_t t;
++  _Atomic curl_off_t t;
+ } times[] = {
+ #ifdef HAVE_CURLINFO_NAMELOOKUP_TIME_T
+   { true, "name resolution", CURLINFO_NAMELOOKUP_TIME_T },
+-- 
+2.39.3
+
