@@ -1,0 +1,96 @@
+From 995b1b62add89b437cb51bb7e15a35c265e188b3 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 28 Jul 2023 14:33:03 +0100
+Subject: [PATCH] pool: Add outline get_ready and after_fork functions
+
+In a forthcoming commit we will need to create a multi handle and a
+background thread, requiring use of the .get_ready (for multi) and
+.after_fork (for the thread) plugin methods.  This commit removes the
+empty load_pool function and adds pool_get_ready and pool_after_fork,
+and the associated machinery in curl.c.
+
+This commit on its own does nothing, future commits will fill in these
+functions with useful work.
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit 4075a499115a9e12ea74c4838fe00a7d680de2a1)
+---
+ plugins/curl/curl.c     | 14 +++++++++++++-
+ plugins/curl/curldefs.h |  3 ++-
+ plugins/curl/pool.c     | 12 +++++++++---
+ 3 files changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/plugins/curl/curl.c b/plugins/curl/curl.c
+index 72971093..4e727b86 100644
+--- a/plugins/curl/curl.c
++++ b/plugins/curl/curl.c
+@@ -67,8 +67,18 @@ curl_load (void)
+     nbdkit_error ("libcurl initialization failed: %d", (int) r);
+     exit (EXIT_FAILURE);
+   }
++}
+ 
+-  load_pool ();
++int
++curl_get_ready (void)
++{
++  return pool_get_ready ();
++}
++
++int
++curl_after_fork (void)
++{
++  return pool_after_fork ();
+ }
+ 
+ static void
+@@ -249,6 +259,8 @@ static struct nbdkit_plugin plugin = {
+    */
+   //.config_help       = curl_config_help,
+   .magic_config_key  = "url",
++  .get_ready         = curl_get_ready,
++  .after_fork        = curl_after_fork,
+   .open              = curl_open,
+   .close             = curl_close,
+   .get_size          = curl_get_size,
+diff --git a/plugins/curl/curldefs.h b/plugins/curl/curldefs.h
+index cab4a6b1..939c8d37 100644
+--- a/plugins/curl/curldefs.h
++++ b/plugins/curl/curldefs.h
+@@ -124,7 +124,8 @@ extern struct curl_handle *allocate_handle (void);
+ extern void free_handle (struct curl_handle *);
+ 
+ /* pool.c */
+-extern void load_pool (void);
++extern int pool_get_ready (void);
++extern int pool_after_fork (void);
+ extern void pool_unload (void);
+ extern struct curl_handle *get_handle (void);
+ extern void put_handle (struct curl_handle *ch);
+diff --git a/plugins/curl/pool.c b/plugins/curl/pool.c
+index 50a623a4..eb2d330e 100644
+--- a/plugins/curl/pool.c
++++ b/plugins/curl/pool.c
+@@ -78,10 +78,16 @@ static curl_handle_list curl_handles = empty_vector;
+ static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+ static size_t in_use = 0, waiting = 0;
+ 
+-/* Initialize pool structures. */
+-void
+-load_pool (void)
++int
++pool_get_ready (void)
+ {
++  return 0;
++}
++
++int
++pool_after_fork (void)
++{
++  return 0;
+ }
+ 
+ /* Close and free all handles in the pool. */
+-- 
+2.39.3
+

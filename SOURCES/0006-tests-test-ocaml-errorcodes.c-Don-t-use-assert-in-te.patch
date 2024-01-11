@@ -1,0 +1,53 @@
+From fdd27622047cd8e25af33b66a57899b75e99db82 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 1 Aug 2023 11:42:58 +0100
+Subject: [PATCH] tests/test-ocaml-errorcodes.c: Don't use assert in test
+
+exit with EXIT_FAILURE instead, as the program might be compiled with
+-DNDEBUG.
+
+(cherry picked from commit 678410e23841376d8b742dce3d10c632499367a2)
+---
+ tests/test-ocaml-errorcodes.c | 16 +++++++++++++---
+ 1 file changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/tests/test-ocaml-errorcodes.c b/tests/test-ocaml-errorcodes.c
+index e59f074b..8ab7e0ae 100644
+--- a/tests/test-ocaml-errorcodes.c
++++ b/tests/test-ocaml-errorcodes.c
+@@ -34,8 +34,9 @@
+ 
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <stdint.h>
++#include <inttypes.h>
+ #include <errno.h>
+-#include <assert.h>
+ 
+ #include <libnbd.h>
+ 
+@@ -84,10 +85,19 @@ main (int argc, char *argv[])
+     exit (EXIT_FAILURE);
+   }
+ 
+-  assert (nbd_pread (nbd, buf, 512, 0, 0) == 0);
++  if (nbd_pread (nbd, buf, 512, 0, 0) == -1) {
++    fprintf (stderr, "%s: FAIL: did not expect reading sector 0 to fail\n",
++             argv[0]);
++    exit (EXIT_FAILURE);
++  }
+ 
+   for (i = 0; tests[i].offset != 0; ++i) {
+-    assert (nbd_pread (nbd, buf, 512, tests[i].offset, 0) == -1);
++    if (nbd_pread (nbd, buf, 512, tests[i].offset, 0) != -1) {
++      fprintf (stderr,
++               "%s: FAIL: reading sector %" PRIu64 "should have failed\n",
++               argv[0], tests[i].offset / 512);
++      exit (EXIT_FAILURE);
++    }
+     actual_errno = nbd_get_errno ();
+     if (actual_errno != tests[i].expected_errno) {
+       fprintf (stderr, "%s: FAIL: actual errno = %d expected errno = %d\n",
+-- 
+2.39.3
+

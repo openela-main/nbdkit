@@ -1,0 +1,52 @@
+From 0b9807056e8be58b624b67b281accddc630c5d2c Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 28 Jul 2023 16:47:58 +0100
+Subject: [PATCH] retry-request: Allow get_size operation to be retried
+
+This plugin operation might need to do some real work (instead of just
+fetching a number from memory), and so it might have to be retried.
+
+In particular, changes to the curl plugin make .get_size into a
+heavyweight operation, where previously it was done as a side-effect
+of .open.  And so we must allow .get_size to be retried independent of
+.open.
+
+(cherry picked from commit 0ff9f9e202218e278bf38faf328ec80f25d6b661)
+---
+ filters/retry-request/retry-request.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/filters/retry-request/retry-request.c b/filters/retry-request/retry-request.c
+index e5b8344c..8e3dd824 100644
+--- a/filters/retry-request/retry-request.c
++++ b/filters/retry-request/retry-request.c
+@@ -141,6 +141,18 @@ retry_request_open (nbdkit_next_open *next, nbdkit_context *nxdata,
+   return r == 0 ? NBDKIT_HANDLE_NOT_NEEDED : NULL;
+ }
+ 
++static int64_t
++retry_request_get_size (nbdkit_next *next, void *handle)
++{
++  int64_t r;
++  int *err = &errno;          /* used by the RETRY_* macros */
++
++  RETRY_START("get_size")
++    r = next->get_size (next);
++  RETRY_END;
++  return r;
++}
++
+ static int
+ retry_request_pread (nbdkit_next *next,
+                      void *handle, void *buf, uint32_t count, uint64_t offset,
+@@ -267,6 +279,7 @@ static struct nbdkit_filter filter = {
+   .config            = retry_request_config,
+   .config_help       = retry_request_config_help,
+   .open              = retry_request_open,
++  .get_size          = retry_request_get_size,
+   .pread             = retry_request_pread,
+   .pwrite            = retry_request_pwrite,
+   .trim              = retry_request_trim,
+-- 
+2.39.3
+

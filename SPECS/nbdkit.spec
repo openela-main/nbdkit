@@ -46,14 +46,14 @@ ExclusiveArch:  x86_64
 %global verify_tarball_signature 1
 
 # If there are patches which touch autotools files, set this to 1.
-%global patches_touch_autotools %{nil}
+%global patches_touch_autotools 1
 
 # The source directory.
-%global source_directory 1.32-stable
+%global source_directory 1.34-stable
 
 Name:           nbdkit
-Version:        1.32.5
-Release:        4%{?dist}
+Version:        1.34.2
+Release:        1%{?dist}
 Summary:        NBD server
 
 License:        BSD
@@ -75,13 +75,34 @@ Source2:        libguestfs.keyring
 Source3:        copy-patches.sh
 
 # Patches come from the upstream repository:
-# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.2/
+# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.3/
 
 # Patches.
-Patch0001:     0001-ssh-Remove-left-over-comment.patch
-Patch0002:     0002-ssh-Improve-the-error-message-when-all-authenticatio.patch
-Patch0003:     0003-luks-Avoid-crash-when-image-does-not-contain-a-LUKS-.patch
-Patch0004:     0004-curl-Enable-multi-conn-for-read-only-connections.patch
+Patch0001:     0001-tests-test-connect.c-Skip-if-exit-with-parent-is-not.patch
+Patch0002:     0002-tests-Use-exit-with-parent-in-the-test-framework.patch
+Patch0003:     0003-protect-Fix-copy-and-paste-error-in-the-documentatio.patch
+Patch0004:     0004-docs-nbdkit-protocol.pod-Fix-manual-page-name.patch
+Patch0005:     0005-retry-request-Print-operation-we-are-retrying-in-deb.patch
+Patch0006:     0006-tests-test-ocaml-errorcodes.c-Don-t-use-assert-in-te.patch
+Patch0007:     0007-tests-test-ocaml-errorcodes.c-Enable-verbose-message.patch
+Patch0008:     0008-curl-Use-the-parallel-thread-model.patch
+Patch0009:     0009-curl-Add-ipresolve-option.patch
+Patch0010:     0010-curl-Add-resolve-option.patch
+Patch0011:     0011-curl-pool-Add-abstract-load_pool-and-unload_pool-fun.patch
+Patch0012:     0012-curl-Add-D-curl.times-1-to-collect-time-statistics.patch
+Patch0013:     0013-curl-Fix-call-to-update_times.patch
+Patch0014:     0014-curl-Move-configuration-code-to-a-separate-file.patch
+Patch0015:     0015-curl-Make-times-seconds-field-slightly-wider.patch
+Patch0016:     0016-curl-Use-_Atomic-type-to-accumulate-curl-timings.patch
+Patch0017:     0017-curl-Add-D-curl.verbose.ids-1-to-display-conn-and-xf.patch
+Patch0018:     0018-curl-Rename-unload_config-unload_pool-config_unload-.patch
+Patch0019:     0019-pool-Add-outline-get_ready-and-after_fork-functions.patch
+Patch0020:     0020-curl-Do-pool_unload-before-config_unload.patch
+Patch0021:     0021-retry-request-Allow-get_size-operation-to-be-retried.patch
+Patch0022:     0022-tests-test-retry-request-mirror.c-Don-t-assume-state.patch
+Patch0023:     0023-curl-Use-curl-multi-interface.patch
+Patch0024:     0024-curl-Redefine-connections-N-parameter-as-number-of-H.patch
+Patch0025:     0025-curl-Disable-this-plugin-on-Windows.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -111,6 +132,7 @@ BuildRequires:  e2fsprogs, e2fsprogs-devel
 %if !0%{?rhel}
 BuildRequires:  xorriso
 BuildRequires:  rb_libtorrent-devel
+BuildRequires:  libblkio-devel
 %endif
 BuildRequires:  bash-completion
 BuildRequires:  perl-devel
@@ -268,6 +290,18 @@ This package contains example plugins for %{name}.
 
 # The plugins below have non-trivial dependencies are so are
 # packaged separately.
+
+%if !0%{?rhel}
+%package blkio-plugin
+Summary:        libblkio NVMe, vhost-user, vDPA, VFIO plugin for %{name}
+License:        BSD
+Requires:       %{name}-server%{?_isa} = %{version}-%{release}
+
+%description blkio-plugin
+This package contains libblkio (NVMe, vhost-user, vDPA, VFIO) support
+for %{name}.
+%endif
+
 
 %if !0%{?rhel}
 %package cc-plugin
@@ -689,35 +723,65 @@ autoreconf -i
 # package into their vendor/ directory.
 export PYTHON=%{__python3}
 %configure \
-    --with-extra='%{name}-%{version}-%{release}' \
     --disable-static \
+    --with-extra='%{name}-%{version}-%{release}' \
+    --with-tls-priority=@NBDKIT,SYSTEM \
+    --with-bash-completions \
+    --with-curl \
+    --with-gnutls \
+    --with-liblzma \
+    --with-libnbd \
+    --with-manpages \
+    --with-selinux \
+    --with-ssh \
+    --with-zlib \
+    --enable-linuxdisk \
+    --enable-python \
     --disable-golang \
     --disable-rust \
+    --disable-valgrind \
 %if !0%{?rhel} && 0%{?have_ocaml}
     --enable-ocaml \
 %else
     --disable-ocaml \
 %endif
-%if 0%{?rhel}
+%if !0%{?rhel}
+    --enable-lua \
+    --enable-perl \
+    --enable-ruby \
+    --enable-tcl \
+    --enable-torrent \
+    --with-libblkio \
+    --with-ext2 \
+    --with-iso \
+    --with-libvirt \
+%else
     --disable-lua \
     --disable-perl \
     --disable-ruby \
     --disable-tcl \
+    --disable-torrent \
+    --without-libblkio \
     --without-ext2 \
     --without-iso \
     --without-libvirt \
+%endif
+%ifarch x86_64
+    --enable-vddk \
+%else
+    --disable-vddk \
 %endif
 %if !0%{?rhel} && 0%{?have_libguestfs}
     --with-libguestfs \
 %else
     --without-libguestfs \
 %endif
-%ifarch %{complete_test_arches}
+%ifarch !0%{?rhel} && 0%{?have_libguestfs} && %{complete_test_arches}
     --enable-libguestfs-tests \
 %else
     --disable-libguestfs-tests \
 %endif
-    --with-tls-priority=@NBDKIT,SYSTEM
+    %{nil}
 
 # Verify that it picked the correct version of Python
 # to avoid RHBZ#1404631 happening again silently.
@@ -738,7 +802,7 @@ rm -f $RPM_BUILD_ROOT%{_mandir}/man3/nbdkit-rust-plugin.3*
 
 %if 0%{?rhel}
 # In RHEL, remove some plugins we cannot --disable.
-for f in cc cdi torrent; do
+for f in cc cdi ; do
     rm -f $RPM_BUILD_ROOT%{_libdir}/%{name}/plugins/nbdkit-$f-plugin.so
     rm -f $RPM_BUILD_ROOT%{_mandir}/man?/nbdkit-$f-plugin.*
 done
@@ -873,6 +937,15 @@ export LIBGUESTFS_TRACE=1
 %{_libdir}/%{name}/plugins/nbdkit-example4-plugin
 %endif
 %{_mandir}/man1/nbdkit-example*-plugin.1*
+
+
+%if !0%{?rhel}
+%files blkio-plugin
+%doc README.md
+%license LICENSE
+%{_libdir}/%{name}/plugins/nbdkit-blkio-plugin.so
+%{_mandir}/man1/nbdkit-blkio-plugin.1*
+%endif
 
 
 %if !0%{?rhel}
@@ -1200,6 +1273,16 @@ export LIBGUESTFS_TRACE=1
 
 
 %changelog
+* Tue Aug 01 2023 Richard W.M. Jones <rjones@redhat.com> - 1.34.2-1
+- Rebase to 1.34.2
+  resolves: rhbz#2168629
+- Backport nbdkit-curl-plugin "multi" interface support
+  resolves: rhbz#2228131
+
+* Tue Apr 18 2023 Richard W.M. Jones <rjones@redhat.com> - 1.34.1-1
+- Rebase to 1.34.1
+  resolves: rhbz#2168629
+
 * Fri Feb 03 2023 Richard W.M. Jones <rjones@redhat.com> - 1.32.5-4
 - Rebase to new stable branch version 1.32.5
   resolves: rhbz#2135765

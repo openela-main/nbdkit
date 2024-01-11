@@ -1,0 +1,26 @@
+From c6da52fd3d9a9e5e8ad4648bba686c37b5d3fae7 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 23 Jul 2023 20:15:23 +0100
+Subject: [PATCH] docs/nbdkit-protocol.pod: Fix manual page name
+
+Updates: commit dce32051318c3e8bd20825cc0db5df15f95d11fa
+(cherry picked from commit 00aa248cec0a64ca293bbedffbf47426ee2b2340)
+---
+ docs/nbdkit-protocol.pod | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/nbdkit-protocol.pod b/docs/nbdkit-protocol.pod
+index 7e89a607..dabdf23c 100644
+--- a/docs/nbdkit-protocol.pod
++++ b/docs/nbdkit-protocol.pod
+@@ -1,6 +1,6 @@
+ =head1 NAME
+ 
+-nbdkit - which parts of the NBD protocol nbdkit supports
++nbdkit-protocol - which parts of the NBD protocol nbdkit supports
+ 
+ =head1 SYNOPSIS
+ 
+-- 
+2.39.3
+
