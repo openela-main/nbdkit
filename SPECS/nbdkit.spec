@@ -40,7 +40,7 @@ ExclusiveArch:  x86_64
 
 Name:           nbdkit
 Version:        1.24.0
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        NBD server
 
 License:        BSD
@@ -69,6 +69,9 @@ Patch0001:     0001-cache-cow-Fix-data-corruption-in-zero-and-trim-on-un.patch
 Patch0002:     0002-server-CVE-2021-3716-reset-structured-replies-on-sta.patch
 Patch0003:     0003-server-reset-meta-context-replies-on-starttls.patch
 Patch0004:     0004-cow-Fix-for-qemu-6.1-which-requires-backing-format.patch
+Patch0005:     0005-vddk-Include-VDDK-major-library-version-in-dump-plug.patch
+Patch0006:     0006-vddk-Only-print-vddk_library_version-when-we-managed.patch
+Patch0007:     0007-vddk-Add-support-for-VDDK-8.0.0.patch
 
 %if 0%{patches_touch_autotools}
 BuildRequires:  autoconf, automake, libtool
@@ -1238,6 +1241,10 @@ export LIBGUESTFS_TRACE=1
 
 
 %changelog
+* Fri Nov 18 2022 Richard W.M. Jones <rjones@redhat.com> - 1.24.0-5
+- vddk: Add support for VDDK 8.0.0
+  resolves: rhbz#2143907
+
 * Wed Jan 26 2022 Richard W.M. Jones <rjones@redhat.com> - 1.24.0-4
 - Fix build on RHEL 8.6 with qemu >= 6.1
   resolves: rhbz#2045945
