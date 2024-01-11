@@ -1,0 +1,40 @@
+From add9b794b9dc697a1b52115c997fcfb6e06bf64c Mon Sep 17 00:00:00 2001
+From: Eric Blake <eblake@redhat.com>
+Date: Mon, 16 Aug 2021 13:43:29 -0500
+Subject: [PATCH] server: reset meta context replies on starttls
+
+Related to CVE-2021-3716, but not as severe.  No compliant client will
+send NBD_CMD_BLOCK_STATUS unless it first negotiates
+NBD_OPT_SET_META_CONTEXT.  If an attacker injects a premature
+SET_META_CONTEXT, either the client will never notice (because it
+never uses BLOCK_STATUS), or the client will overwrite the attacker's
+attempt with the client's own SET_META_CONTEXT request after
+encryption is enabled.  So I don't class this as having the potential
+to trigger denial-of-service due to any protocol mismatch between
+compliant client and server (I don't care what happens with
+non-compliant clients).
+
+Fixes: 26455d45 (server: protocol: Implement Block Status "base:allocation".)
+(cherry picked from commit 6c5faac6a37077cf2366388a80862bb00616d0d8)
+(cherry picked from commit 814d8103fb4b581dc01dfd25d2cd81596576f211)
+---
+ server/protocol-handshake-newstyle.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/server/protocol-handshake-newstyle.c b/server/protocol-handshake-newstyle.c
+index b94950e2..eb0f3961 100644
+--- a/server/protocol-handshake-newstyle.c
++++ b/server/protocol-handshake-newstyle.c
+@@ -497,6 +497,9 @@ negotiate_handshake_newstyle_options (void)
+         debug ("using TLS on this connection");
+         /* Wipe out any cached state. */
+         conn->structured_replies = false;
++        free (conn->exportname_from_set_meta_context);
++        conn->exportname_from_set_meta_context = NULL;
++        conn->meta_context_base_allocation = false;
+         for_each_backend (b) {
+           struct handle *h = get_handle (conn, b->i);
+           free (h->default_exportname);
+-- 
+2.31.1
+
