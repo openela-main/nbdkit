@@ -1,0 +1,30 @@
+From b8eb91e9102a2ae6cb96b0f2ffdb96b724cbb1b7 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 20 Dec 2023 10:38:27 +0000
+Subject: [PATCH] partition: Don't call nbdkit_error twice on error path
+
+Fixes: commit 7b9301a4c569456a4f96784229a2cd48e8957662
+(cherry picked from commit 036b178a4affd00b8bbdb6cb140e81b62f57a374)
+---
+ filters/partition/partition-gpt.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/filters/partition/partition-gpt.c b/filters/partition/partition-gpt.c
+index 80acddb4..930e2081 100644
+--- a/filters/partition/partition-gpt.c
++++ b/filters/partition/partition-gpt.c
+@@ -92,10 +92,8 @@ find_gpt_partition (nbdkit_next *next,
+   int err;
+ 
+   if (get_gpt_header (header_bytes,
+-                      &nr_partition_entries, &size_partition_entry) == -1) {
+-    nbdkit_error ("cannot support non-standard GPT header");
++                      &nr_partition_entries, &size_partition_entry) == -1)
+     return -1;
+-  }
+ 
+   if (partnum > nr_partition_entries) {
+     nbdkit_error ("GPT partition number out of range");
+-- 
+2.39.3
+

@@ -22,6 +22,8 @@
 %global have_ocaml 1
 %endif
 
+%global have_blkio 1
+
 # Architectures where we run the complete test suite including
 # the libguestfs tests.
 #
@@ -49,14 +51,14 @@ ExclusiveArch:  x86_64
 %global patches_touch_autotools 1
 
 # The source directory.
-%global source_directory 1.34-stable
+%global source_directory 1.36-stable
 
 Name:           nbdkit
-Version:        1.34.2
+Version:        1.36.2
 Release:        1%{?dist}
 Summary:        NBD server
 
-License:        BSD
+License:        BSD-3-Clause
 URL:            https://gitlab.com/nbdkit/nbdkit
 
 %if 0%{?rhel} >= 8
@@ -75,34 +77,16 @@ Source2:        libguestfs.keyring
 Source3:        copy-patches.sh
 
 # Patches come from the upstream repository:
-# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.3/
+# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.4/
 
 # Patches.
-Patch0001:     0001-tests-test-connect.c-Skip-if-exit-with-parent-is-not.patch
-Patch0002:     0002-tests-Use-exit-with-parent-in-the-test-framework.patch
-Patch0003:     0003-protect-Fix-copy-and-paste-error-in-the-documentatio.patch
-Patch0004:     0004-docs-nbdkit-protocol.pod-Fix-manual-page-name.patch
-Patch0005:     0005-retry-request-Print-operation-we-are-retrying-in-deb.patch
-Patch0006:     0006-tests-test-ocaml-errorcodes.c-Don-t-use-assert-in-te.patch
-Patch0007:     0007-tests-test-ocaml-errorcodes.c-Enable-verbose-message.patch
-Patch0008:     0008-curl-Use-the-parallel-thread-model.patch
-Patch0009:     0009-curl-Add-ipresolve-option.patch
-Patch0010:     0010-curl-Add-resolve-option.patch
-Patch0011:     0011-curl-pool-Add-abstract-load_pool-and-unload_pool-fun.patch
-Patch0012:     0012-curl-Add-D-curl.times-1-to-collect-time-statistics.patch
-Patch0013:     0013-curl-Fix-call-to-update_times.patch
-Patch0014:     0014-curl-Move-configuration-code-to-a-separate-file.patch
-Patch0015:     0015-curl-Make-times-seconds-field-slightly-wider.patch
-Patch0016:     0016-curl-Use-_Atomic-type-to-accumulate-curl-timings.patch
-Patch0017:     0017-curl-Add-D-curl.verbose.ids-1-to-display-conn-and-xf.patch
-Patch0018:     0018-curl-Rename-unload_config-unload_pool-config_unload-.patch
-Patch0019:     0019-pool-Add-outline-get_ready-and-after_fork-functions.patch
-Patch0020:     0020-curl-Do-pool_unload-before-config_unload.patch
-Patch0021:     0021-retry-request-Allow-get_size-operation-to-be-retried.patch
-Patch0022:     0022-tests-test-retry-request-mirror.c-Don-t-assume-state.patch
-Patch0023:     0023-curl-Use-curl-multi-interface.patch
-Patch0024:     0024-curl-Redefine-connections-N-parameter-as-number-of-H.patch
-Patch0025:     0025-curl-Disable-this-plugin-on-Windows.patch
+Patch0001:     0001-configure-Fix-initialization-from-incompatible-point.patch
+Patch0002:     0002-file-Rework-documentation-for-dir-parameter.patch
+Patch0003:     0003-file-Fix-markup-when-referencing-dir-option-from-dir.patch
+Patch0004:     0004-file-Further-rework-documentation-of-dir-parameter.patch
+Patch0005:     0005-exportname-Fix-markup-for-linking-to-other-man-pages.patch
+Patch0006:     0006-partition-Don-t-call-nbdkit_error-twice-on-error-pat.patch
+Patch0007:     0007-partition-Suggest-alternate-partition-sectorsize.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -124,6 +108,9 @@ BuildRequires:  libguestfs-devel
 BuildRequires:  libvirt-devel
 BuildRequires:  xz-devel
 BuildRequires:  zlib-devel
+%if !0%{?rhel}
+BuildRequires:  zlib-ng-devel
+%endif
 BuildRequires:  libzstd-devel
 BuildRequires:  libcurl-devel
 BuildRequires:  libnbd-devel >= 1.3.11
@@ -132,6 +119,8 @@ BuildRequires:  e2fsprogs, e2fsprogs-devel
 %if !0%{?rhel}
 BuildRequires:  xorriso
 BuildRequires:  rb_libtorrent-devel
+%endif
+%if 0%{?have_blkio}
 BuildRequires:  libblkio-devel
 %endif
 BuildRequires:  bash-completion
@@ -224,7 +213,6 @@ reading the nbdkit(1) and nbdkit-plugin(3) manual pages.
 
 %package server
 Summary:        The %{name} server
-License:        BSD
 
 %description server
 This package contains the %{name} server with only the null plugin
@@ -235,7 +223,6 @@ the metapackage "nbdkit".
 
 %package basic-plugins
 Summary:        Basic plugins for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 
@@ -260,6 +247,8 @@ nbdkit-memory-plugin        A virtual memory plugin.
 
 nbdkit-ondemand-plugin      Create filesystems on demand.
 
+nbdkit-ones-plugin          Fill disk with repeated 0xff or other bytes.
+
 nbdkit-pattern-plugin       Fixed test pattern.
 
 nbdkit-partitioning-plugin  Create virtual disks from partitions.
@@ -277,7 +266,6 @@ nbdkit-zero-plugin          Zero-length plugin for testing.
 
 %package example-plugins
 Summary:        Example plugins for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 %if !0%{?rhel}
 # example4 is written in Perl.
@@ -291,10 +279,9 @@ This package contains example plugins for %{name}.
 # The plugins below have non-trivial dependencies are so are
 # packaged separately.
 
-%if !0%{?rhel}
+%if 0%{?have_blkio}
 %package blkio-plugin
 Summary:        libblkio NVMe, vhost-user, vDPA, VFIO plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description blkio-plugin
@@ -306,7 +293,6 @@ for %{name}.
 %if !0%{?rhel}
 %package cc-plugin
 Summary:        Write small inline C plugins and scripts for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 Requires:       gcc
 Requires:       %{_bindir}/cat
@@ -321,7 +307,6 @@ in C, install %{name}-devel for that.
 %if !0%{?rhel}
 %package cdi-plugin
 Summary:        Containerized Data Import plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 Requires:       jq
 Requires:       podman
@@ -333,7 +318,6 @@ This package contains Containerized Data Import support for %{name}.
 
 %package curl-plugin
 Summary:        HTTP/FTP (cURL) plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description curl-plugin
@@ -343,7 +327,6 @@ This package contains cURL (HTTP/FTP) support for %{name}.
 %if !0%{?rhel} && 0%{?have_libguestfs}
 %package guestfs-plugin
 Summary:        libguestfs plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description guestfs-plugin
@@ -354,7 +337,6 @@ This package is a libguestfs plugin for %{name}.
 %if !0%{?rhel}
 %package iso-plugin
 Summary:        Virtual ISO 9660 plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 Requires:       xorriso
 
@@ -366,7 +348,6 @@ This package is a virtual ISO 9660 (CD-ROM) plugin for %{name}.
 %if !0%{?rhel}
 %package libvirt-plugin
 Summary:        Libvirt plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description libvirt-plugin
@@ -378,7 +359,6 @@ virDomainBlockPeek API.
 
 %package linuxdisk-plugin
 Summary:        Virtual Linux disk plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 # for mke2fs
 Requires:       e2fsprogs
@@ -390,7 +370,6 @@ This package is a virtual Linux disk plugin for %{name}.
 %if !0%{?rhel}
 %package lua-plugin
 Summary:        Lua plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description lua-plugin
@@ -400,7 +379,6 @@ This package lets you write Lua plugins for %{name}.
 
 %package nbd-plugin
 Summary:        NBD proxy / forward plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description nbd-plugin
@@ -411,7 +389,6 @@ to another NBD server.
 %if !0%{?rhel} && 0%{?have_ocaml}
 %package ocaml-plugin
 Summary:        OCaml plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description ocaml-plugin
@@ -423,7 +400,6 @@ To compile OCaml plugins you will also need to install
 
 %package ocaml-plugin-devel
 Summary:        OCaml development environment for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 Requires:       %{name}-ocaml-plugin%{?_isa} = %{version}-%{release}
 
@@ -435,7 +411,6 @@ This package lets you write OCaml plugins for %{name}.
 %if !0%{?rhel}
 %package perl-plugin
 Summary:        Perl plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description perl-plugin
@@ -445,7 +420,6 @@ This package lets you write Perl plugins for %{name}.
 
 %package python-plugin
 Summary:        Python 3 plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description python-plugin
@@ -455,7 +429,6 @@ This package lets you write Python 3 plugins for %{name}.
 %if !0%{?rhel}
 %package ruby-plugin
 Summary:        Ruby plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description ruby-plugin
@@ -468,7 +441,6 @@ This package lets you write Ruby plugins for %{name}.
 # which varies across architectures, RPM does not allow this.
 %package S3-plugin
 Summary:        Amazon S3 and Ceph plugin for %{name}
-License:        BSD
 Requires:       %{name}-python-plugin >= 1.22
 # XXX Should not need to add this.
 Requires:       python3-boto3
@@ -481,7 +453,6 @@ or Ceph using %{name}.
 
 %package ssh-plugin
 Summary:        SSH plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description ssh-plugin
@@ -491,7 +462,6 @@ This package contains SSH support for %{name}.
 %if !0%{?rhel}
 %package tcl-plugin
 Summary:        Tcl plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description tcl-plugin
@@ -501,7 +471,6 @@ This package lets you write Tcl plugins for %{name}.
 
 %package tmpdisk-plugin
 Summary:        Remote temporary filesystem disk plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 # For mkfs and mke2fs (defaults).
 Requires:       util-linux, e2fsprogs
@@ -518,7 +487,6 @@ This package is a remote temporary filesystem disk plugin for %{name}.
 %if !0%{?rhel}
 %package torrent-plugin
 Summary:        BitTorrent plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description torrent-plugin
@@ -529,7 +497,6 @@ This package is a BitTorrent plugin for %{name}.
 %ifarch x86_64
 %package vddk-plugin
 Summary:        VMware VDDK plugin for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 # https://bugzilla.redhat.com/show_bug.cgi?id=1931818
 Requires:       libxcrypt-compat
@@ -542,7 +509,6 @@ VMware VDDK for accessing VMware disks and servers.
 
 %package basic-filters
 Summary:        Basic filters for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description basic-filters
@@ -567,6 +533,8 @@ nbdkit-ddrescue-filter     Filter for serving from ddrescue dump.
 nbdkit-delay-filter        Inject read and write delays.
 
 nbdkit-error-filter        Inject errors.
+
+nbdkit-evil-filter         Add random data corruption to reads.
 
 nbdkit-exitlast-filter     Exit on last client connection.
 
@@ -606,6 +574,10 @@ nbdkit-pause-filter        Pause NBD requests.
 
 nbdkit-protect-filter      Write-protect parts of a plugin.
 
+%if !0%{?rhel}
+nbdkit-qcow2dec-filter     Decode qcow2 files.
+
+%endif
 nbdkit-rate-filter         Limit bandwidth by connection or server.
 
 nbdkit-readahead-filter    Prefetch data when reading sequentially.
@@ -626,7 +598,6 @@ nbdkit-truncate-filter     Truncate, expand, round up or round down size.
 %if !0%{?rhel}
 %package ext2-filter
 Summary:        ext2, ext3 and ext4 filesystem support for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description ext2-filter
@@ -637,7 +608,6 @@ This package contains ext2, ext3 and ext4 filesystem support for
 
 %package gzip-filter
 Summary:        GZip filter for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description gzip-filter
@@ -646,7 +616,6 @@ This package is a gzip filter for %{name}.
 
 %package stats-filter
 Summary:        Statistics filter for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description stats-filter
@@ -655,7 +624,6 @@ Display statistics about operations.
 
 %package tar-filter
 Summary:        Tar archive filter for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 Requires:       tar
 Obsoletes:      %{name}-tar-plugin < 1.23.9-3
@@ -666,7 +634,6 @@ This package is a tar archive filter for %{name}.
 
 %package xz-filter
 Summary:        XZ filter for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description xz-filter
@@ -675,7 +642,6 @@ This package is the xz filter for %{name}.
 
 %package devel
 Summary:        Development files and documentation for %{name}
-License:        BSD
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 Requires:       pkgconfig
 
@@ -687,7 +653,6 @@ plugins for %{name}.
 
 %package srpm-macros
 Summary:       RPM Provides rules for %{name} plugins and filters
-License:       BSD
 BuildArch:     noarch
 
 %description srpm-macros
@@ -697,7 +662,6 @@ for %{name} plugins and filters found in the plugins directory.
 
 %package bash-completion
 Summary:       Bash tab-completion for %{name}
-License:       BSD
 BuildArch:     noarch
 Requires:      bash-completion >= 2.0
 Requires:      %{name}-server = %{version}-%{release}
@@ -735,6 +699,11 @@ export PYTHON=%{__python3}
     --with-selinux \
     --with-ssh \
     --with-zlib \
+%if !0%{?rhel}
+    --with-zlib-ng \
+%else
+    --without-zlib-ng \
+%endif
     --enable-linuxdisk \
     --enable-python \
     --disable-golang \
@@ -751,7 +720,6 @@ export PYTHON=%{__python3}
     --enable-ruby \
     --enable-tcl \
     --enable-torrent \
-    --with-libblkio \
     --with-ext2 \
     --with-iso \
     --with-libvirt \
@@ -761,10 +729,14 @@ export PYTHON=%{__python3}
     --disable-ruby \
     --disable-tcl \
     --disable-torrent \
-    --without-libblkio \
     --without-ext2 \
     --without-iso \
     --without-libvirt \
+%endif
+%if 0%{?have_blkio}
+    --with-libblkio \
+%else
+    --without-libblkio \
 %endif
 %ifarch x86_64
     --enable-vddk \
@@ -801,13 +773,15 @@ find $RPM_BUILD_ROOT -name '*.la' -delete
 rm -f $RPM_BUILD_ROOT%{_mandir}/man3/nbdkit-rust-plugin.3*
 
 %if 0%{?rhel}
-# In RHEL, remove some plugins we cannot --disable.
+# In RHEL, remove some plugins and filters we cannot --disable.
 for f in cc cdi ; do
     rm -f $RPM_BUILD_ROOT%{_libdir}/%{name}/plugins/nbdkit-$f-plugin.so
     rm -f $RPM_BUILD_ROOT%{_mandir}/man?/nbdkit-$f-plugin.*
 done
 rm -f $RPM_BUILD_ROOT%{_libdir}/%{name}/plugins/nbdkit-S3-plugin
 rm -f $RPM_BUILD_ROOT%{_mandir}/man1/nbdkit-S3-plugin.1*
+rm -f $RPM_BUILD_ROOT%{_libdir}/%{name}/filters/nbdkit-qcow2dec-filter.so
+rm -f $RPM_BUILD_ROOT%{_mandir}/man1/nbdkit-qcow2dec-filter.1*
 %endif
 
 # Install RPM dependency generator.
@@ -905,6 +879,7 @@ export LIBGUESTFS_TRACE=1
 %{_libdir}/%{name}/plugins/nbdkit-info-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-memory-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-ondemand-plugin.so
+%{_libdir}/%{name}/plugins/nbdkit-ones-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-partitioning-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-pattern-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-random-plugin.so
@@ -920,6 +895,7 @@ export LIBGUESTFS_TRACE=1
 %{_mandir}/man1/nbdkit-info-plugin.1*
 %{_mandir}/man1/nbdkit-memory-plugin.1*
 %{_mandir}/man1/nbdkit-ondemand-plugin.1*
+%{_mandir}/man1/nbdkit-ones-plugin.1*
 %{_mandir}/man1/nbdkit-partitioning-plugin.1*
 %{_mandir}/man1/nbdkit-pattern-plugin.1*
 %{_mandir}/man1/nbdkit-random-plugin.1*
@@ -939,7 +915,7 @@ export LIBGUESTFS_TRACE=1
 %{_mandir}/man1/nbdkit-example*-plugin.1*
 
 
-%if !0%{?rhel}
+%if 0%{?have_blkio}
 %files blkio-plugin
 %doc README.md
 %license LICENSE
@@ -1124,6 +1100,7 @@ export LIBGUESTFS_TRACE=1
 %{_libdir}/%{name}/filters/nbdkit-ddrescue-filter.so
 %{_libdir}/%{name}/filters/nbdkit-delay-filter.so
 %{_libdir}/%{name}/filters/nbdkit-error-filter.so
+%{_libdir}/%{name}/filters/nbdkit-evil-filter.so
 %{_libdir}/%{name}/filters/nbdkit-exitlast-filter.so
 %{_libdir}/%{name}/filters/nbdkit-exitwhen-filter.so
 %{_libdir}/%{name}/filters/nbdkit-exportname-filter.so
@@ -1143,6 +1120,9 @@ export LIBGUESTFS_TRACE=1
 %{_libdir}/%{name}/filters/nbdkit-partition-filter.so
 %{_libdir}/%{name}/filters/nbdkit-pause-filter.so
 %{_libdir}/%{name}/filters/nbdkit-protect-filter.so
+%if !0%{?rhel}
+%{_libdir}/%{name}/filters/nbdkit-qcow2dec-filter.so
+%endif
 %{_libdir}/%{name}/filters/nbdkit-rate-filter.so
 %{_libdir}/%{name}/filters/nbdkit-readahead-filter.so
 %{_libdir}/%{name}/filters/nbdkit-retry-filter.so
@@ -1160,6 +1140,7 @@ export LIBGUESTFS_TRACE=1
 %{_mandir}/man1/nbdkit-ddrescue-filter.1*
 %{_mandir}/man1/nbdkit-delay-filter.1*
 %{_mandir}/man1/nbdkit-error-filter.1*
+%{_mandir}/man1/nbdkit-evil-filter.1*
 %{_mandir}/man1/nbdkit-exitlast-filter.1*
 %{_mandir}/man1/nbdkit-exitwhen-filter.1*
 %{_mandir}/man1/nbdkit-exportname-filter.1*
@@ -1179,6 +1160,9 @@ export LIBGUESTFS_TRACE=1
 %{_mandir}/man1/nbdkit-partition-filter.1*
 %{_mandir}/man1/nbdkit-pause-filter.1*
 %{_mandir}/man1/nbdkit-protect-filter.1*
+%if !0%{?rhel}
+%{_mandir}/man1/nbdkit-qcow2dec-filter.1*
+%endif
 %{_mandir}/man1/nbdkit-rate-filter.1*
 %{_mandir}/man1/nbdkit-readahead-filter.1*
 %{_mandir}/man1/nbdkit-retry-filter.1*
@@ -1273,6 +1257,12 @@ export LIBGUESTFS_TRACE=1
 
 
 %changelog
+* Tue Dec 20 2023 Richard W.M. Jones <rjones@redhat.com> - 1.36.2-1
+- Rebase to 1.36.2
+  resolves: RHEL-14475
+- partition: Suggest alternate partition-sectorsize
+  resolves: RHEL-19815
+
 * Tue Aug 01 2023 Richard W.M. Jones <rjones@redhat.com> - 1.34.2-1
 - Rebase to 1.34.2
   resolves: rhbz#2168629

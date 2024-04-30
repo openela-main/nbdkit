@@ -1,0 +1,44 @@
+From ac87babe2d1652e3f37715efe9f29ad6f16eb9df Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Mon, 4 Dec 2023 10:23:29 +0000
+Subject: [PATCH] configure: Fix initialization from incompatible pointer type
+
+With GCC 14:
+
+  configure:20816: checking if environ is declared in header files
+  configure:20833: gcc -c -O2 -flto=auto -ffat-lto-objects -fexceptions -g -grec
+ord-gcc-switches -pipe -Wall -Werror=format-security
+-Werror=implicit-function-declaration -Werror=implicit-int
+-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -Wp,-D_GLIBCXX_ASSERTIONS
+-specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong
+-specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64   -mtune=generic
+-fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection
+-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer   conftest.c >&5
+  conftest.c: In function 'test':
+  conftest.c:62:22: error: initialization of 'const char **' from incompatible p
+ointer type 'char **'
+     62 |   const char **env = environ;
+        |                      ^~~~~~~
+
+Thanks: Florian Weimer
+(cherry picked from commit 32a9ee6650654469cd591a3ae26842c54f898392)
+---
+ configure.ac | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index 3b12e357..beab4674 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -335,7 +335,7 @@ AC_LANG_SOURCE([[
+ static int
+ test (void)
+ {
+-  const char **env = environ;
++  char **env = environ;
+   return env ? 1 : 0; // this just forces env to be used
+ }
+ ]])
+-- 
+2.39.3
+

@@ -1,0 +1,52 @@
+From 3b168aa842dc80a6d95b2c1ccb52a8ef664e7aba Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 20 Dec 2023 10:34:10 +0000
+Subject: [PATCH] partition: Suggest alternate partition-sectorsize
+
+When we reach this error it means that we have failed to detect the
+"EFI PART" signature (indicating GPT) and we've fallen back to parsing
+MBR, but in doing so we have discovered a GPT protective MBR which
+should only happen for GPT.  A possible cause for missing the
+signature was because we have the wrong sector size.
+
+Therefore check for the current sector size (which should be either
+512 or 4096) and suggest that the user sets the other sector size.
+
+Also avoids the case where the user already set partition-sectorsize=4k
+and we were suggesting that they set it again.
+
+Reported-by: Ming Xie
+Fixes: commit 7b9301a4c569456a4f96784229a2cd48e8957662
+Fixes: https://issues.redhat.com/browse/RHEL-19815
+(cherry picked from commit cd761c9bf770b23f678fd82f0d1c8d4cce2ed1b5)
+---
+ filters/partition/partition-mbr.c | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/filters/partition/partition-mbr.c b/filters/partition/partition-mbr.c
+index 3927c31f..6a81addb 100644
+--- a/filters/partition/partition-mbr.c
++++ b/filters/partition/partition-mbr.c
+@@ -87,9 +87,16 @@ find_mbr_partition (nbdkit_next *next,
+           !is_extended (partition.part_type_byte) &&
+           partnum == i+1) {
+         if (partition.part_type_byte == 0xEE) {
+-          nbdkit_error ("rejecting GPT protective entry from MBR, "
+-                        "if the underlying storage uses 4K sectors "
+-                        "try using partition-sectorsize=4k");
++          if (sector_size == 512)
++            nbdkit_error ("rejecting GPT protective entry from MBR, "
++                          "if the underlying storage uses 4K sectors "
++                          "try using partition-sectorsize=4k");
++          else if (sector_size == 4096)
++            nbdkit_error ("rejecting GPT protective entry from MBR, "
++                          "if the underlying storage uses 512 byte sectors "
++                          "try using partition-sectorsize=512");
++          else
++            nbdkit_error ("rejecting GPT protective entry from MBR");
+           return -1;
+         }
+         *offset_r = partition.start_sector * (int64_t) sector_size;
+-- 
+2.39.3
+

@@ -1,0 +1,29 @@
+From c155987ee521c2d6a163d2814dc869ec1e89fd90 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sat, 16 Dec 2023 18:32:50 +0000
+Subject: [PATCH] exportname: Fix markup for linking to other man pages
+
+Fixes: commit 7623b2cc45078cca88fdd2d96c70c7f82a0db49d
+(cherry picked from commit 6104f55f3851f3b82dc69f7e78c32e9c7a93dbc9)
+---
+ filters/exportname/nbdkit-exportname-filter.pod | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/filters/exportname/nbdkit-exportname-filter.pod b/filters/exportname/nbdkit-exportname-filter.pod
+index 1d69f7d4..f95a37be 100644
+--- a/filters/exportname/nbdkit-exportname-filter.pod
++++ b/filters/exportname/nbdkit-exportname-filter.pod
+@@ -10,8 +10,8 @@ nbdkit-exportname-filter - adjust export names between client and plugin
+ 
+ =head1 DESCRIPTION
+ 
+-Some plugins (such as C<nbdkit-file-plugin(1)> and filters (such as
+-C<nbdkit-ext2-filter(1)> are able to serve different content based on
++Some plugins (such as L<nbdkit-file-plugin(1)> and filters (such as
++L<nbdkit-ext2-filter(1)> are able to serve different content based on
+ the export name requested by the client.  The NBD protocol allows a
+ server to advertise the set of export names it is serving.  However,
+ the list advertised (or absent) from the plugin may not always match
+-- 
+2.39.3
+
