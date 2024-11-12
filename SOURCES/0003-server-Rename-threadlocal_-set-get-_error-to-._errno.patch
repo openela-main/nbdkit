@@ -1,0 +1,177 @@
+From 179227c7d6b0677dcd1dced55881e0d024745424 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 24 Jul 2024 10:29:13 +0100
+Subject: [PATCH] server: Rename threadlocal_{set,get}_error to .._errno
+
+A simple mechanical change, to avoid confusion with
+threadlocal_{set,get}_last_error introduced in the following commit.
+
+(cherry picked from commit 1d7f655726ad3483d0e8086741182aada7ae8595)
+---
+ server/internal.h    |  4 ++--
+ server/plugins.c     | 27 +++++++++++++--------------
+ server/protocol.c    |  5 +++--
+ server/threadlocal.c |  4 ++--
+ 4 files changed, 20 insertions(+), 20 deletions(-)
+
+diff --git a/server/internal.h b/server/internal.h
+index 57e777e9..6549c87b 100644
+--- a/server/internal.h
++++ b/server/internal.h
+@@ -568,8 +568,8 @@ extern void threadlocal_set_name (const char *name)
+ extern const char *threadlocal_get_name (void);
+ extern void threadlocal_set_instance_num (size_t instance_num);
+ extern size_t threadlocal_get_instance_num (void);
+-extern void threadlocal_set_error (int err);
+-extern int threadlocal_get_error (void);
++extern void threadlocal_set_errno (int err);
++extern int threadlocal_get_errno (void);
+ extern void *threadlocal_buffer (size_t size);
+ extern void threadlocal_set_conn (struct connection *conn);
+ extern struct connection *threadlocal_get_conn (void);
+diff --git a/server/plugins.c b/server/plugins.c
+index ca89ac7a..3c7df0d2 100644
+--- a/server/plugins.c
++++ b/server/plugins.c
+@@ -633,15 +633,14 @@ plugin_can_cache (struct context *c)
+ NBDKIT_DLL_PUBLIC void
+ nbdkit_set_error (int err)
+ {
+-  threadlocal_set_error (err);
++  threadlocal_set_errno (err);
+ }
+ 
+-/* Grab the appropriate error value.
+- */
++/* Grab the appropriate error value. */
+ static int
+-get_error (struct backend_plugin *p)
++get_errno (struct backend_plugin *p)
+ {
+-  int ret = threadlocal_get_error ();
++  int ret = threadlocal_get_errno ();
+ 
+   if (!ret && p->plugin.errno_is_preserved != 0)
+     ret = errno;
+@@ -664,7 +663,7 @@ plugin_pread (struct context *c,
+   else
+     r = p->plugin._pread_v1 (c->handle, buf, count, offset);
+   if (r == -1)
+-    *err = get_error (p);
++    *err = get_errno (p);
+   return r;
+ }
+ 
+@@ -685,7 +684,7 @@ plugin_flush (struct context *c,
+     return -1;
+   }
+   if (r == -1)
+-    *err = get_error (p);
++    *err = get_errno (p);
+   return r;
+ }
+ 
+@@ -715,7 +714,7 @@ plugin_pwrite (struct context *c,
+   if (r != -1 && need_flush)
+     r = plugin_flush (c, 0, err);
+   if (r == -1 && !*err)
+-    *err = get_error (p);
++    *err = get_errno (p);
+   return r;
+ }
+ 
+@@ -744,7 +743,7 @@ plugin_trim (struct context *c,
+   if (r != -1 && need_flush)
+     r = plugin_flush (c, 0, err);
+   if (r == -1 && !*err)
+-    *err = get_error (p);
++    *err = get_errno (p);
+   return r;
+ }
+ 
+@@ -782,7 +781,7 @@ plugin_zero (struct context *c,
+     else
+       emulate = true;
+     if (r == -1)
+-      *err = emulate ? EOPNOTSUPP : get_error (p);
++      *err = emulate ? EOPNOTSUPP : get_errno (p);
+     if (r == 0 || (*err != EOPNOTSUPP && *err != ENOTSUP))
+       goto done;
+   }
+@@ -794,7 +793,7 @@ plugin_zero (struct context *c,
+   }
+ 
+   flags &= ~NBDKIT_FLAG_MAY_TRIM;
+-  threadlocal_set_error (0);
++  threadlocal_set_errno (0);
+   *err = 0;
+ 
+   while (count) {
+@@ -814,7 +813,7 @@ plugin_zero (struct context *c,
+   if (r != -1 && need_flush)
+     r = plugin_flush (c, 0, err);
+   if (r == -1 && !*err)
+-    *err = get_error (p);
++    *err = get_errno (p);
+   return r;
+ }
+ 
+@@ -839,7 +838,7 @@ plugin_extents (struct context *c,
+     r = -1;
+   }
+   if (r == -1)
+-    *err = get_error (p);
++    *err = get_errno (p);
+   return r;
+ }
+ 
+@@ -859,7 +858,7 @@ plugin_cache (struct context *c,
+ 
+   r = p->plugin.cache (c->handle, count, offset, flags);
+   if (r == -1)
+-    *err = get_error (p);
++    *err = get_errno (p);
+   return r;
+ }
+ 
+diff --git a/server/protocol.c b/server/protocol.c
+index 9b63f789..677da05c 100644
+--- a/server/protocol.c
++++ b/server/protocol.c
+@@ -235,8 +235,9 @@ handle_request (uint16_t cmd, uint16_t flags, uint64_t offset, uint32_t count,
+   int err = 0;
+ 
+   /* Clear the error, so that we know if the plugin calls
+-   * nbdkit_set_error() or relied on errno.  */
+-  threadlocal_set_error (0);
++   * nbdkit_set_error() or relied on errno.
++   */
++  threadlocal_set_errno (0);
+ 
+   switch (cmd) {
+   case NBD_CMD_READ:
+diff --git a/server/threadlocal.c b/server/threadlocal.c
+index 088fe55a..9bb656bc 100644
+--- a/server/threadlocal.c
++++ b/server/threadlocal.c
+@@ -154,7 +154,7 @@ threadlocal_get_instance_num (void)
+ }
+ 
+ void
+-threadlocal_set_error (int err)
++threadlocal_set_errno (int err)
+ {
+   struct threadlocal *threadlocal = pthread_getspecific (threadlocal_key);
+ 
+@@ -167,7 +167,7 @@ threadlocal_set_error (int err)
+ /* This preserves errno, for convenience.
+  */
+ int
+-threadlocal_get_error (void)
++threadlocal_get_errno (void)
+ {
+   int err = errno;
+   struct threadlocal *threadlocal = pthread_getspecific (threadlocal_key);
+-- 
+2.43.0
+

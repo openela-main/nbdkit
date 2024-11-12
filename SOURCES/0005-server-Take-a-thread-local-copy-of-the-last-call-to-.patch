@@ -1,0 +1,95 @@
+From a0e3f9d58142b8c5e7bcc9b73da60778e6503d0b Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 23 Jul 2024 15:28:06 +0100
+Subject: [PATCH] server: Take a thread-local copy of the last call to
+ nbdkit_error
+
+nbdkit_error has traditionally been a "fancy wrapper around fprintf"
+(kind of, don't take that literally).  It is encouraged that plugins
+and filters do something like:
+
+  if (error) {
+    nbdkit_error ("oops, a bad thing happened");
+    return -1;
+  }
+
+but we don't enforce this.  Plugins might call nbdkit_error more than
+once or not at all.
+
+The point where we get to sending an error back over the wire to the
+NBD client is long after the plugin returned above, and after
+nbdkit_error was called.
+
+Therefore in order to send errors back to the NBD client, we must keep
+the last error message around.
+
+This change simply modifies nbdkit_error to make a best-effort attempt
+to save the last error message in thread-local storage.
+
+We also clear the last error when a new request starts, to ensure that
+we don't leak errors across different callbacks or connections.
+
+(cherry picked from commit bfa6d4064cb74f429149d14ab4025b258fc95ec4)
+---
+ server/log.c      | 21 +++++++++++++++++++++
+ server/protocol.c |  5 +++++
+ 2 files changed, 26 insertions(+)
+
+diff --git a/server/log.c b/server/log.c
+index 9c1f667a..acf14d57 100644
+--- a/server/log.c
++++ b/server/log.c
+@@ -40,6 +40,25 @@
+ 
+ #include "internal.h"
+ 
++/* Copy the error message to threadlocal.  This is sent to callers
++ * which are using structured replies, but is for extra information
++ * only so don't fail if we are unable to copy it.
++ */
++static void
++copy_error_to_threadlocal (int orig_errno, const char *fs, va_list args)
++{
++  va_list args_copy;
++  char *msg;
++  int r;
++
++  va_copy (args_copy, args);
++  errno = orig_errno;        /* must restore in case fs contains %m */
++  r = vasprintf (&msg, fs, args_copy);
++  va_end (args_copy);
++  if (r != -1 && msg)
++    threadlocal_set_last_error (msg); /* ownership passed to threadlocal */
++}
++
+ /* Call the right log_*_verror function depending on log_sink.
+  * Note: preserves the previous value of errno.
+  */
+@@ -48,6 +67,8 @@ log_verror (const char *fs, va_list args)
+ {
+   int orig_errno = errno;
+ 
++  copy_error_to_threadlocal (orig_errno, fs, args);
++
+   switch (log_to) {
+   case LOG_TO_DEFAULT:
+     if (forked_into_background)
+diff --git a/server/protocol.c b/server/protocol.c
+index 677da05c..d428bfc8 100644
+--- a/server/protocol.c
++++ b/server/protocol.c
+@@ -239,6 +239,11 @@ handle_request (uint16_t cmd, uint16_t flags, uint64_t offset, uint32_t count,
+    */
+   threadlocal_set_errno (0);
+ 
++  /* Also clear the last error in this thread so we will only save
++   * nbdkit_error() from this request.
++   */
++  threadlocal_clear_last_error ();
++
+   switch (cmd) {
+   case NBD_CMD_READ:
+     if (backend_pread (c, buf, count, offset, 0, &err) == -1)
+-- 
+2.43.0
+

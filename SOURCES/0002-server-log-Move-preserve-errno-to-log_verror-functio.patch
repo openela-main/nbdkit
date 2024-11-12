@@ -1,0 +1,151 @@
+From f39c63a79ffb888bd565eb49b0ee2590fad8fbb9 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 23 Jul 2024 14:46:41 +0100
+Subject: [PATCH] server: log: Move preserve errno to log_verror function
+
+This neutral code refactoring just moves the place where we preserve
+errno out one layer, but should have no other effect.
+
+(cherry picked from commit f2c644d4495d5e75883ff729936102c90489e8d8)
+---
+ server/internal.h   |  8 ++++----
+ server/log-stderr.c |  9 ++-------
+ server/log-syslog.c | 13 ++++---------
+ server/log.c        | 12 ++++++++----
+ 4 files changed, 18 insertions(+), 24 deletions(-)
+
+diff --git a/server/internal.h b/server/internal.h
+index 7eba3bce..57e777e9 100644
+--- a/server/internal.h
++++ b/server/internal.h
+@@ -339,10 +339,10 @@ extern void free_debug_flags (void);
+ extern void log_verror (const char *fs, va_list args);
+ 
+ /* log-*.c */
+-extern void log_stderr_verror (const char *fs, va_list args)
+-  ATTRIBUTE_FORMAT_PRINTF (1, 0);
+-extern void log_syslog_verror (const char *fs, va_list args)
+-  ATTRIBUTE_FORMAT_PRINTF (1, 0);
++extern void log_stderr_verror (int orig_errno, const char *fs, va_list args)
++  ATTRIBUTE_FORMAT_PRINTF (2, 0);
++extern void log_syslog_verror (int orig_errno, const char *fs, va_list args)
++  ATTRIBUTE_FORMAT_PRINTF (2, 0);
+ 
+ /* vfprintf.c */
+ #if !HAVE_VFPRINTF_PERCENT_M
+diff --git a/server/log-stderr.c b/server/log-stderr.c
+index 8a55f5df..4d8b09da 100644
+--- a/server/log-stderr.c
++++ b/server/log-stderr.c
+@@ -43,12 +43,9 @@
+ 
+ #include "internal.h"
+ 
+-/* Note: preserves the previous value of errno. */
+ void
+-log_stderr_verror (const char *fs, va_list args)
++log_stderr_verror (int orig_errno, const char *fs, va_list args)
+ {
+-  int err = errno;              /* must be first line of function */
+-
+   const char *name = threadlocal_get_name ();
+   size_t instance_num = threadlocal_get_instance_num ();
+   int tty;
+@@ -69,7 +66,7 @@ log_stderr_verror (const char *fs, va_list args)
+   }
+ 
+   fprintf (stderr, "error: ");
+-  errno = err;                  /* must restore in case fs contains %m */
++  errno = orig_errno;        /* must restore in case fs contains %m */
+   vfprintf (stderr, fs, args);
+   fprintf (stderr, "\n");
+ 
+@@ -78,6 +75,4 @@ log_stderr_verror (const char *fs, va_list args)
+ #ifdef HAVE_FUNLOCKFILE
+   funlockfile (stderr);
+ #endif
+-
+-  errno = err;                  /* must be last line of function */
+ }
+diff --git a/server/log-syslog.c b/server/log-syslog.c
+index 76c5035b..29a7a825 100644
+--- a/server/log-syslog.c
++++ b/server/log-syslog.c
+@@ -45,11 +45,9 @@
+ /* Tempted to use LOG_FTP instead of LOG_DAEMON! */
+ static const int PRIORITY = LOG_DAEMON|LOG_ERR;
+ 
+-/* Note: preserves the previous value of errno. */
+ void
+-log_syslog_verror (const char *fs, va_list args)
++log_syslog_verror (int orig_errno, const char *fs, va_list args)
+ {
+-  int err = errno;
+   const char *name = threadlocal_get_name ();
+   size_t instance_num = threadlocal_get_instance_num ();
+   CLEANUP_FREE char *msg = NULL;
+@@ -59,9 +57,9 @@ log_syslog_verror (const char *fs, va_list args)
+   fp = open_memstream (&msg, &len);
+   if (fp == NULL) {
+     /* Fallback to logging using fs, args directly. */
+-    errno = err; /* Must restore in case fs contains %m */
++    errno = orig_errno;      /* must restore in case fs contains %m */
+     vsyslog (PRIORITY, fs, args);
+-    goto out;
++    return;
+   }
+ 
+   if (name) {
+@@ -71,12 +69,9 @@ log_syslog_verror (const char *fs, va_list args)
+     fprintf (fp, ": ");
+   }
+ 
+-  errno = err; /* Must restore in case fs contains %m */
++  errno = orig_errno;        /* must restore in case fs contains %m */
+   vfprintf (fp, fs, args);
+   close_memstream (fp);
+ 
+   syslog (PRIORITY, "%s", msg);
+-
+- out:
+-  errno = err;
+ }
+diff --git a/server/log.c b/server/log.c
+index 464e4f9a..9c1f667a 100644
+--- a/server/log.c
++++ b/server/log.c
+@@ -46,23 +46,27 @@
+ void
+ log_verror (const char *fs, va_list args)
+ {
++  int orig_errno = errno;
++
+   switch (log_to) {
+   case LOG_TO_DEFAULT:
+     if (forked_into_background)
+-      log_syslog_verror (fs, args);
++      log_syslog_verror (orig_errno, fs, args);
+     else
+-      log_stderr_verror (fs, args);
++      log_stderr_verror (orig_errno, fs, args);
+     break;
+   case LOG_TO_SYSLOG:
+-    log_syslog_verror (fs, args);
++    log_syslog_verror (orig_errno, fs, args);
+     break;
+   case LOG_TO_STDERR:
+-    log_stderr_verror (fs, args);
++    log_stderr_verror (orig_errno, fs, args);
+     break;
+   case LOG_TO_NULL:
+     /* nothing */
+     break;
+   }
++
++  errno = orig_errno; /* Restore errno before leaving the function. */
+ }
+ 
+ /* Note: preserves the previous value of errno. */
+-- 
+2.43.0
+

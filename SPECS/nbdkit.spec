@@ -22,7 +22,19 @@
 %global have_ocaml 1
 %endif
 
+# libblkio was broken on i686: https://bugzilla.redhat.com/2229372
+# but somehow "fixed itself", keep an eye on it.
 %global have_blkio 1
+
+# Enable mingw subpackage on Fedora only.
+%if 0%{?fedora}
+%global have_mingw 1
+%endif
+
+# Enable nbdkit-selinux package.
+%global with_selinux 1
+%global modulename nbdkit
+%global selinuxtype targeted
 
 # Architectures where we run the complete test suite including
 # the libguestfs tests.
@@ -36,25 +48,14 @@
 # it as a bug and add it to this list.
 %global broken_test_arches NONE
 
-%if 0%{?rhel} == 7
-# On RHEL 7, nothing in the virt stack is shipped on aarch64 and
-# libguestfs was not shipped on POWER (fixed in 7.5).  We could in
-# theory make all of this work by having lots more conditionals, but
-# for now limit this package to x86_64 on RHEL.
-ExclusiveArch:  x86_64
-%endif
-
 # If we should verify tarball signature with GPGv2.
 %global verify_tarball_signature 1
 
-# If there are patches which touch autotools files, set this to 1.
-%global patches_touch_autotools 1
-
 # The source directory.
-%global source_directory 1.36-stable
+%global source_directory 1.38-stable
 
 Name:           nbdkit
-Version:        1.36.2
+Version:        1.38.3
 Release:        1%{?dist}
 Summary:        NBD server
 
@@ -77,27 +78,33 @@ Source2:        libguestfs.keyring
 Source3:        copy-patches.sh
 
 # Patches come from the upstream repository:
-# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.4/
+# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.5/
 
 # Patches.
-Patch0001:     0001-configure-Fix-initialization-from-incompatible-point.patch
-Patch0002:     0002-file-Rework-documentation-for-dir-parameter.patch
-Patch0003:     0003-file-Fix-markup-when-referencing-dir-option-from-dir.patch
-Patch0004:     0004-file-Further-rework-documentation-of-dir-parameter.patch
-Patch0005:     0005-exportname-Fix-markup-for-linking-to-other-man-pages.patch
-Patch0006:     0006-partition-Don-t-call-nbdkit_error-twice-on-error-pat.patch
-Patch0007:     0007-partition-Suggest-alternate-partition-sectorsize.patch
+Patch0001:     0001-nbdkit-1.38-Fix-inclusion-of-gnutls-socket.h-with-ol.patch
+Patch0002:     0002-server-log-Move-preserve-errno-to-log_verror-functio.patch
+Patch0003:     0003-server-Rename-threadlocal_-set-get-_error-to-._errno.patch
+Patch0004:     0004-server-Introduce-threadlocal_-set-get-_last_error.patch
+Patch0005:     0005-server-Take-a-thread-local-copy-of-the-last-call-to-.patch
+Patch0006:     0006-server-Send-the-last-error-to-the-NBD-client.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
 Source4:        nbdkit.attr
 Source5:        nbdkit-find-provides
 
-BuildRequires: make
-%if 0%{patches_touch_autotools}
-BuildRequires:  autoconf, automake, libtool
-%endif
+# For nbdkit-selinux package:
+Source6:        %{modulename}.te
+Source7:        %{modulename}.if
+Source8:        %{modulename}.fc
 
+# For applying the patches:
+BuildRequires:  git
+
+# For rebuilding autoconf cruft:
+BuildRequires:  autoconf, automake, libtool
+
+BuildRequires:  make
 BuildRequires:  gcc, gcc-c++
 BuildRequires:  %{_bindir}/pod2man
 BuildRequires:  gnutls-devel
@@ -173,11 +180,37 @@ BuildRequires:  %{_bindir}/stat
 # itself, but it's a simple noarch package so easy to install.
 BuildRequires:  nbdkit-srpm-macros >= 1.30.0
 
+%if 0%{?have_mingw}
+BuildRequires:  mingw32-filesystem
+BuildRequires:  mingw64-filesystem
+BuildRequires:  mingw32-gcc
+BuildRequires:  mingw64-gcc
+BuildRequires:  mingw32-gcc-c++
+BuildRequires:  mingw64-gcc-c++
+BuildRequires:  mingw32-dlfcn
+BuildRequires:  mingw64-dlfcn
+BuildRequires:  mingw32-gnutls
+BuildRequires:  mingw64-gnutls
+BuildRequires:  mingw32-winpthreads
+BuildRequires:  mingw64-winpthreads
+BuildRequires:  mingw32-xz
+BuildRequires:  mingw64-xz
+BuildRequires:  mingw32-zlib
+BuildRequires:  mingw64-zlib
+%endif
+
 # nbdkit is a metapackage pulling the server and a useful subset
 # of the plugins and filters.
 Requires:       nbdkit-server%{?_isa} = %{version}-%{release}
 Requires:       nbdkit-basic-plugins%{?_isa} = %{version}-%{release}
 Requires:       nbdkit-basic-filters%{?_isa} = %{version}-%{release}
+
+%if 0%{?with_selinux}
+# This ensures that the nbdkit-selinux package and all its
+# dependencies are not pulled into containers and other systems that
+# do not use SELinux.
+Requires:       (%{name}-selinux if selinux-policy-%{selinuxtype})
+%endif
 
 
 %description
@@ -324,6 +357,22 @@ Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 This package contains cURL (HTTP/FTP) support for %{name}.
 
 
+%if !0%{?rhel}
+# In theory this is noarch, but because plugins are placed in _libdir
+# which varies across architectures, RPM does not allow this.
+%package gcs-plugin
+Summary:        Gooogle Cloud Storage plugin %{name}
+Requires:       %{name}-python-plugin%{?_isa} = %{version}-%{release}
+Requires:       %{name}-server%{?_isa} = %{version}-%{release}
+# XXX Should not need to add this.
+Requires:       python3-google-cloud-storage
+
+%description gcs-plugin
+This package lets you open disk images stored in Google
+Cloud Storage using %{name}.
+%endif
+
+
 %if !0%{?rhel} && 0%{?have_libguestfs}
 %package guestfs-plugin
 Summary:        libguestfs plugin for %{name}
@@ -441,7 +490,8 @@ This package lets you write Ruby plugins for %{name}.
 # which varies across architectures, RPM does not allow this.
 %package S3-plugin
 Summary:        Amazon S3 and Ceph plugin for %{name}
-Requires:       %{name}-python-plugin >= 1.22
+Requires:       %{name}-python-plugin%{?_isa} = %{version}-%{release}
+Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 # XXX Should not need to add this.
 Requires:       python3-boto3
 
@@ -582,6 +632,8 @@ nbdkit-rate-filter         Limit bandwidth by connection or server.
 
 nbdkit-readahead-filter    Prefetch data when reading sequentially.
 
+nbdkit-readonly-filter     Switch a plugin between read-only and writable.
+
 nbdkit-retry-filter        Reopen connection on error.
 
 nbdkit-retry-request-filter Retry single requests on error.
@@ -671,17 +723,70 @@ Install this package if you want intelligent bash tab-completion
 for %{name}.
 
 
+%if 0%{?with_selinux}
+%package selinux
+Summary:       %{name} SELinux policy
+BuildArch:     noarch
+Requires:      selinux-policy-%{selinuxtype}
+Requires(post):selinux-policy-%{selinuxtype}
+BuildRequires: selinux-policy-devel
+%{?selinux_requires}
+
+%description selinux
+%{nbdkit} SELinux policy module.
+%endif
+
+
+%if 0%{?have_mingw}
+%package -n mingw32-%{name}
+Summary:       nbdkit binary, plugins, filters, development files for Windows
+BuildArch:     noarch
+Requires:      mingw32-filesystem
+Requires:      pkgconfig
+
+%description -n mingw32-%{name}
+NBD is a protocol for accessing block devices (hard disks and
+disk-like things) over the network.
+
+nbdkit is a toolkit for creating NBD servers.
+
+This package contains the nbdkit binary, plugins, filters and
+development kit for 32 bit versions of Windows.
+
+
+%package -n mingw64-%{name}
+Summary:       nbdkit binary, plugins, filters, development files for Windows
+BuildArch:     noarch
+Requires:      mingw64-filesystem
+Requires:      pkgconfig
+
+%description -n mingw64-%{name}
+NBD is a protocol for accessing block devices (hard disks and
+disk-like things) over the network.
+
+nbdkit is a toolkit for creating NBD servers.
+
+This package contains the nbdkit binary, plugins, filters and
+development kit for 64 bit versions of Windows.
+
+
+%{?mingw_debug_package}
+%endif
+
+
 %prep
 %if 0%{verify_tarball_signature}
 %{gpgverify} --keyring='%{SOURCE2}' --signature='%{SOURCE1}' --data='%{SOURCE0}'
 %endif
-%autosetup -p1
-%if 0%{patches_touch_autotools}
+%autosetup -p1 -S git
 autoreconf -i
-%endif
 
 
 %build
+mkdir build_native
+pushd build_native
+%global _configure ../configure
+
 # Golang bindings are not enabled in the build since they don't
 # need to be.  Most people would use them by copying the upstream
 # package into their vendor/ directory.
@@ -761,8 +866,64 @@ grep '^PYTHON_VERSION = 3' Makefile
 
 %make_build
 
+%if 0%{?with_selinux}
+# SELinux policy (originally from selinux-policy-contrib)
+# this policy module will override the production module
+mkdir selinux
+cp -p %{SOURCE6} selinux/
+cp -p %{SOURCE7} selinux/
+cp -p %{SOURCE8} selinux/
+
+make -f %{_datadir}/selinux/devel/Makefile %{modulename}.pp
+bzip2 -9 %{modulename}.pp
+%endif
+
+popd
+
+%if 0%{?have_mingw}
+# MC=no is a temporary hack until this bug is fixed in binutils:
+# https://sourceware.org/bugzilla/show_bug.cgi?id=31283
+%mingw_configure \
+    MC=no \
+    --disable-static \
+    --enable-shared \
+    --with-extra='%{name}-%{version}-%{release}' \
+    --with-tls-priority=@NBDKIT,SYSTEM \
+    --disable-golang \
+    --disable-libguestfs-tests \
+    --disable-linuxdisk \
+    --disable-lua \
+    --disable-ocaml \
+    --disable-perl \
+    --disable-python \
+    --disable-ruby \
+    --disable-rust \
+    --disable-tcl \
+    --disable-torrent \
+    --disable-valgrind \
+    --disable-vddk \
+    --without-bash-completions \
+    --without-curl \
+    --without-ext2 \
+    --with-gnutls \
+    --without-iso \
+    --without-libblkio \
+    --without-libguestfs \
+    --without-libnbd \
+    --without-libvirt \
+    --with-liblzma \
+    --without-manpages \
+    --without-selinux \
+    --without-ssh \
+    --with-zlib \
+    %{nil}
+
+%mingw_make %{?_smp_mflags}
+%endif
+
 
 %install
+pushd build_native
 %make_install
 
 # Delete libtool crap.
@@ -778,8 +939,10 @@ for f in cc cdi ; do
     rm -f $RPM_BUILD_ROOT%{_libdir}/%{name}/plugins/nbdkit-$f-plugin.so
     rm -f $RPM_BUILD_ROOT%{_mandir}/man?/nbdkit-$f-plugin.*
 done
-rm -f $RPM_BUILD_ROOT%{_libdir}/%{name}/plugins/nbdkit-S3-plugin
-rm -f $RPM_BUILD_ROOT%{_mandir}/man1/nbdkit-S3-plugin.1*
+for f in gcs S3 ; do
+    rm -f $RPM_BUILD_ROOT%{_libdir}/%{name}/plugins/nbdkit-$f-plugin
+    rm -f $RPM_BUILD_ROOT%{_mandir}/man1/nbdkit-$f-plugin.1*
+done
 rm -f $RPM_BUILD_ROOT%{_libdir}/%{name}/filters/nbdkit-qcow2dec-filter.so
 rm -f $RPM_BUILD_ROOT%{_mandir}/man1/nbdkit-qcow2dec-filter.1*
 %endif
@@ -789,9 +952,34 @@ mkdir -p $RPM_BUILD_ROOT%{_rpmconfigdir}/fileattrs/
 install -m 0644 %{SOURCE4} $RPM_BUILD_ROOT%{_rpmconfigdir}/fileattrs/
 install -m 0755 %{SOURCE5} $RPM_BUILD_ROOT%{_rpmconfigdir}/
 
+%if 0%{?with_selinux}
+install -D -m 0644 %{modulename}.pp.bz2 $RPM_BUILD_ROOT%{_datadir}/selinux/packages/%{selinuxtype}/%{modulename}.pp.bz2
+install -D -p -m 0644 selinux/%{modulename}.if $RPM_BUILD_ROOT%{_datadir}/selinux/devel/include/distributed/%{modulename}.if
+%endif
+popd
+
+%if 0%{?have_mingw}
+%mingw_make_install
+
+# Remove .la files
+rm -f $RPM_BUILD_ROOT%{mingw32_libdir}/*.la
+rm -f $RPM_BUILD_ROOT%{mingw64_libdir}/*.la
+
+# The .def files aren't interesting for other binaries
+rm -f $RPM_BUILD_ROOT%{mingw32_bindir}/*.def
+rm -f $RPM_BUILD_ROOT%{mingw64_bindir}/*.def
+
+# Remove man pages which duplicate stuff in Fedora already.
+rm -rf $RPM_BUILD_ROOT%{mingw32_mandir}
+rm -rf $RPM_BUILD_ROOT%{mingw64_mandir}
+
+%mingw_debug_install_post
+%endif
+
 
 %check
 %ifnarch %{broken_test_arches}
+pushd build_native
 function skip_test ()
 {
     for f in "$@"; do
@@ -836,11 +1024,32 @@ export LIBGUESTFS_TRACE=1
     cat tests/test-suite.log
     exit 1
   }
+popd
 %endif
 
 
 %if 0%{?have_ocaml}
 %ldconfig_scriptlets plugin-ocaml
+%endif
+
+
+%if 0%{?with_selinux}
+# SELinux contexts are saved so that only affected files can be
+# relabeled after the policy module installation
+%pre selinux
+%selinux_relabel_pre -s %{selinuxtype}
+
+%post selinux
+%selinux_modules_install -s %{selinuxtype} %{_datadir}/selinux/packages/%{selinuxtype}/%{modulename}.pp.bz2
+
+%postun selinux
+if [ $1 -eq 0 ]; then
+    %selinux_modules_uninstall -s %{selinuxtype} %{modulename}
+fi
+
+%posttrans selinux
+%selinux_relabel_post -s %{selinuxtype}
+# if with_selinux
 %endif
 
 
@@ -947,6 +1156,15 @@ export LIBGUESTFS_TRACE=1
 %license LICENSE
 %{_libdir}/%{name}/plugins/nbdkit-curl-plugin.so
 %{_mandir}/man1/nbdkit-curl-plugin.1*
+
+
+%if !0%{?rhel}
+%files gcs-plugin
+%doc README.md
+%license LICENSE
+%{_libdir}/%{name}/plugins/nbdkit-gcs-plugin
+%{_mandir}/man1/nbdkit-gcs-plugin.1*
+%endif
 
 
 %if !0%{?rhel} && 0%{?have_libguestfs}
@@ -1125,6 +1343,7 @@ export LIBGUESTFS_TRACE=1
 %endif
 %{_libdir}/%{name}/filters/nbdkit-rate-filter.so
 %{_libdir}/%{name}/filters/nbdkit-readahead-filter.so
+%{_libdir}/%{name}/filters/nbdkit-readonly-filter.so
 %{_libdir}/%{name}/filters/nbdkit-retry-filter.so
 %{_libdir}/%{name}/filters/nbdkit-retry-request-filter.so
 %{_libdir}/%{name}/filters/nbdkit-scan-filter.so
@@ -1165,6 +1384,7 @@ export LIBGUESTFS_TRACE=1
 %endif
 %{_mandir}/man1/nbdkit-rate-filter.1*
 %{_mandir}/man1/nbdkit-readahead-filter.1*
+%{_mandir}/man1/nbdkit-readonly-filter.1*
 %{_mandir}/man1/nbdkit-retry-filter.1*
 %{_mandir}/man1/nbdkit-retry-request-filter.1*
 %{_mandir}/man1/nbdkit-scan-filter.1*
@@ -1216,7 +1436,7 @@ export LIBGUESTFS_TRACE=1
 # Include the source of the example plugins in the documentation.
 %doc plugins/example*/*.c
 %if !0%{?rhel}
-%doc plugins/example4/nbdkit-example4-plugin
+%doc build_native/plugins/example4/nbdkit-example4-plugin
 %doc plugins/lua/example.lua
 %endif
 %if !0%{?rhel} && 0%{?have_ocaml}
@@ -1229,7 +1449,7 @@ export LIBGUESTFS_TRACE=1
 %if !0%{?rhel}
 %doc plugins/ruby/example.rb
 %endif
-%doc plugins/sh/example.sh
+%doc plugins/sh/examples/*.sh
 %if !0%{?rhel}
 %doc plugins/tcl/example.tcl
 %endif
@@ -1256,8 +1476,46 @@ export LIBGUESTFS_TRACE=1
 %{_datadir}/bash-completion/completions/nbdkit
 
 
+%if 0%{?with_selinux}
+%files selinux
+%{_datadir}/selinux/packages/%{selinuxtype}/%{modulename}.pp.*
+%{_datadir}/selinux/devel/include/distributed/%{modulename}.if
+%ghost %verify(not md5 size mode mtime) %{_sharedstatedir}/selinux/%{selinuxtype}/active/modules/200/%{modulename}
+%endif
+
+
+%if 0%{?have_mingw}
+%files -n mingw32-%{name}
+%license LICENSE
+%{mingw32_sbindir}/nbdkit.exe
+%{mingw32_libdir}/%{name}/
+%{mingw32_libdir}/libnbdkit.a
+%{mingw32_libdir}/pkgconfig/%{name}.pc
+%{mingw32_includedir}/*.h
+
+
+%files -n mingw64-%{name}
+%license LICENSE
+%{mingw64_sbindir}/nbdkit.exe
+%{mingw64_libdir}/%{name}/
+%{mingw64_libdir}/libnbdkit.a
+%{mingw64_libdir}/pkgconfig/%{name}.pc
+%{mingw64_includedir}/*.h
+%endif
+
+
 %changelog
-* Tue Dec 20 2023 Richard W.M. Jones <rjones@redhat.com> - 1.36.2-1
+* Fri Jul 26 2024 Richard W.M. Jones <rjones@redhat.com> - 1.38.3-1
+- Rebase to 1.38.3 (along stable branch)
+- Send the last error to the NBD client
+  resolves: RHEL-50664
+
+* Tue Apr 09 2024 Miroslav Rezanina <mrezanin@redhat.com> - 1.38.0-1
+- Rebase to 1.38.0
+- Added selinux subpackage
+- resolves: RHEL-31884
+
+* Wed Dec 20 2023 Richard W.M. Jones <rjones@redhat.com> - 1.36.2-1
 - Rebase to 1.36.2
   resolves: RHEL-14475
 - partition: Suggest alternate partition-sectorsize

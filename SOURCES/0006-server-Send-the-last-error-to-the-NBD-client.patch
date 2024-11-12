@@ -1,0 +1,177 @@
+From 7128144273f5355d7705e09a99aa1b2359e7e823 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 23 Jul 2024 15:45:04 +0100
+Subject: [PATCH] server: Send the last error to the NBD client
+
+This sends the last error saved in the connection handle back to the
+NBD client.  This is informational and best effort.
+
+qemu reports the error already, for example:
+
+  $ nbdkit --log=null \
+           eval open=' echo EPERM Go Away >&2; exit 1 ' get_size=' echo 100 ' \
+           --run 'qemu-img info "$uri"'
+  qemu-img: Could not open 'nbd+unix://?socket=/tmp/nbdkitIDl6iy/socket': Requested export not available
+  server reported: /tmp/nbdkitRDAfXH/open: Go Away
+
+This goes back to at least qemu 2.12.0 (RHEL 7) and possibly earlier,
+so we can just assume that qemu does this for the test.
+
+libnbd requires a patch to display this information.
+
+(cherry picked from commit 46484ca8e6a35c45fe96b6c972ceba8984d401e8)
+---
+ server/protocol-handshake-newstyle.c | 43 ++++++++++++++++------
+ tests/Makefile.am                    |  2 +
+ tests/test-last-error.sh             | 55 ++++++++++++++++++++++++++++
+ 3 files changed, 88 insertions(+), 12 deletions(-)
+ create mode 100755 tests/test-last-error.sh
+
+diff --git a/server/protocol-handshake-newstyle.c b/server/protocol-handshake-newstyle.c
+index 6b3bc76f..c18d32e5 100644
+--- a/server/protocol-handshake-newstyle.c
++++ b/server/protocol-handshake-newstyle.c
+@@ -57,28 +57,47 @@ send_newstyle_option_reply (uint32_t option, uint32_t reply)
+ {
+   GET_CONN;
+   struct nbd_fixed_new_option_reply fixed_new_option_reply;
++  const char *last_error = NULL;
++  uint32_t replylen = 0;
++
++  if (NBD_REP_IS_ERR (reply)) {
++    last_error = threadlocal_get_last_error ();
++    /* Note that calling nbdkit_error will invalidate last_error, so
++     * be careful below.
++     */
++    if (last_error) {
++      size_t len = strlen (last_error);
++      if (len <= NBD_MAX_STRING)
++        replylen = len;
++    }
++  }
+ 
+   fixed_new_option_reply.magic = htobe64 (NBD_REP_MAGIC);
+   fixed_new_option_reply.option = htobe32 (option);
+   fixed_new_option_reply.reply = htobe32 (reply);
+-  fixed_new_option_reply.replylen = htobe32 (0);
++  fixed_new_option_reply.replylen = htobe32 (replylen);
+ 
+   debug ("replying to %s with %s", name_of_nbd_opt (option),
+          name_of_nbd_rep (reply));
+   if (conn->send (&fixed_new_option_reply,
+-                  sizeof fixed_new_option_reply, 0) == -1) {
+-    /* The protocol document says that the client is allowed to simply
+-     * drop the connection after sending NBD_OPT_ABORT, or may read
+-     * the reply.
+-     */
+-    if (option == NBD_OPT_ABORT)
+-      debug ("write: %s: %m", name_of_nbd_opt (option));
+-    else
+-      nbdkit_error ("write: %s: %m", name_of_nbd_opt (option));
+-    return -1;
+-  }
++                  sizeof fixed_new_option_reply,
++                  replylen > 0 ? SEND_MORE : 0) == -1)
++    goto err;
++  if (replylen > 0 && conn->send (last_error, replylen, 0) == -1)
++    goto err;
+ 
+   return 0;
++
++err:
++  /* The protocol document says that the client is allowed to simply
++   * drop the connection after sending NBD_OPT_ABORT, or may read
++   * the reply.
++   */
++  if (option == NBD_OPT_ABORT)
++    debug ("write: %s: %m", name_of_nbd_opt (option));
++  else
++    nbdkit_error ("write: %s: %m", name_of_nbd_opt (option));
++  return -1;
+ }
+ 
+ /* Reply to NBD_OPT_LIST with the plugin's list of export names.
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index 0664e109..9c321fcb 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -276,6 +276,7 @@ TESTS += \
+ 	test-read-password-interactive.sh \
+ 	test-nbd-client.sh \
+ 	test-nbd-client-tls.sh \
++	test-last-error.sh \
+ 	$(NULL)
+ if !IS_WINDOWS
+ TESTS += \
+@@ -301,6 +302,7 @@ EXTRA_DIST += \
+ 	test-plugin-docs.sh \
+ 	test-ipv4-lo.sh \
+ 	test-ipv6-lo.sh \
++	test-last-error.sh \
+ 	test-long-name.sh \
+ 	test-nbd-client.sh \
+ 	test-nbd-client-tls.sh \
+diff --git a/tests/test-last-error.sh b/tests/test-last-error.sh
+new file mode 100755
+index 00000000..fc720606
+--- /dev/null
++++ b/tests/test-last-error.sh
+@@ -0,0 +1,55 @@
++#!/usr/bin/env bash
++# nbdkit
++# Copyright Red Hat
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met:
++#
++# * Redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer.
++#
++# * Redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution.
++#
++# * Neither the name of Red Hat nor the names of its contributors may be
++# used to endorse or promote products derived from this software without
++# specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++# SUCH DAMAGE.
++
++source ./functions.sh
++set -e
++set -x
++
++# Test informational error messages sent to the NBD client.
++# qemu-img supports this since at least 2.12.0.
++
++requires_run
++requires_plugin eval
++requires qemu-img --version
++
++out=last-error.out
++rm -f $out
++cleanup_fn rm -f $out
++
++export out
++
++nbdkit eval \
++       open=' echo EPERM Go Away >&2; exit 1 ' get_size=' echo 0 ' \
++       --run ' qemu-img info "$uri" > $out 2>&1 ||: '
++cat $out
++
++grep "Go Away" $out
+-- 
+2.43.0
+

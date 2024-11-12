@@ -1,0 +1,95 @@
+From 334ab902477a0e1db4d70a5c809eafe49ab1fc6e Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 24 Jul 2024 10:37:58 +0100
+Subject: [PATCH] server: Introduce threadlocal_{set,get}_last_error
+
+Plus a function to clear the last_error field.
+
+(cherry picked from commit fa5055ae2b9f96af941d697de39198c96ee2580a)
+---
+ server/internal.h    |  3 +++
+ server/threadlocal.c | 40 ++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 43 insertions(+)
+
+diff --git a/server/internal.h b/server/internal.h
+index 6549c87b..da19fb99 100644
+--- a/server/internal.h
++++ b/server/internal.h
+@@ -570,6 +570,9 @@ extern void threadlocal_set_instance_num (size_t instance_num);
+ extern size_t threadlocal_get_instance_num (void);
+ extern void threadlocal_set_errno (int err);
+ extern int threadlocal_get_errno (void);
++extern void threadlocal_set_last_error (char *msg);
++extern void threadlocal_clear_last_error (void);
++extern const char *threadlocal_get_last_error (void);
+ extern void *threadlocal_buffer (size_t size);
+ extern void threadlocal_set_conn (struct connection *conn);
+ extern struct connection *threadlocal_get_conn (void);
+diff --git a/server/threadlocal.c b/server/threadlocal.c
+index 9bb656bc..74a3c4e5 100644
+--- a/server/threadlocal.c
++++ b/server/threadlocal.c
+@@ -56,6 +56,7 @@ struct threadlocal {
+   char *name;                   /* Can be NULL. */
+   size_t instance_num;          /* Can be 0. */
+   int err;
++  char *last_error;             /* Can be NULL. */
+   void *buffer;                 /* Can be NULL. */
+   size_t buffer_size;
+   struct connection *conn;      /* Can be NULL. */
+@@ -70,6 +71,7 @@ free_threadlocal (void *threadlocalv)
+   struct threadlocal *threadlocal = threadlocalv;
+ 
+   free (threadlocal->name);
++  free (threadlocal->last_error);
+   free (threadlocal->buffer);
+   free (threadlocal);
+ }
+@@ -176,6 +178,44 @@ threadlocal_get_errno (void)
+   return threadlocal ? threadlocal->err : 0;
+ }
+ 
++/* Set the last_error field.  The ownership of the 'msg' string is
++ * passed to the threadlocal and will be freed here.
++ */
++void
++threadlocal_set_last_error (char *msg)
++{
++  struct threadlocal *threadlocal = pthread_getspecific (threadlocal_key);
++
++  if (threadlocal) {
++    free (threadlocal->last_error);
++    threadlocal->last_error = msg;
++  }
++  else {
++    /* ... otherwise throw it away, it's informational. */
++    free (msg);
++  }
++}
++
++void
++threadlocal_clear_last_error (void)
++{
++  threadlocal_set_last_error (NULL);
++}
++
++/* Get the last_error field.  If successful, this returns a non-NULL
++ * string.  This is valid until something calls nbdkit_error() in the
++ * same thread, so it should be used quickly.  Returning NULL is not
++ * necessarily an error.  The last_error is informational and may not
++ * be available.
++ */
++const char *
++threadlocal_get_last_error (void)
++{
++  struct threadlocal *threadlocal = pthread_getspecific (threadlocal_key);
++
++  return threadlocal ? threadlocal->last_error : NULL;
++}
++
+ /* Return the single pread/pwrite buffer for this thread.  The buffer
+  * size is increased to ‘size’ bytes if required.
+  *
+-- 
+2.43.0
+

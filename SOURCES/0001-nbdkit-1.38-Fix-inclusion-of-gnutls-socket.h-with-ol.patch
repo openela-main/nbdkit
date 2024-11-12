@@ -1,0 +1,46 @@
+From 14a2646d4221d50b4b194d5dd2d6010808ea642b Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 14 Jul 2024 09:50:31 +0100
+Subject: [PATCH] nbdkit 1.38: Fix inclusion of <gnutls/socket.h> with old
+ gnutls
+
+Development branch commit 8ce65bac5a ("build: Move to minimum gnutls
+>= 3.5.18") changed the way that <gnutls/socket.h> is included.  I
+didn't cherry pick this commit to the stable-1.38 branch since we
+don't want to force people to update gnutls.
+
+However when I cherry picked commit 47987e43bd ("server/crypto.c:
+Check <gnutls/socket.h> works before including it"), I missed that
+there was still a place where <gnutls/socket.h> was included (which
+would have been fixed by the commit above).
+
+The upshot is that compilation of nbdkit 1.38.3 fails on mingw:
+
+In file included from ../../server/crypto.c:69:
+/usr/i686-w64-mingw32/sys-root/mingw/include/gnutls/socket.h:32:10: fatal error: sys/socket.h: No such file or directory
+   32 | #include <sys/socket.h>
+      |          ^~~~~~~~~~~~~~
+compilation terminated.
+
+Fixes: commit f889d822dd96bcf8c0427bd541d730d58b166d83
+---
+ server/crypto.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/server/crypto.c b/server/crypto.c
+index 83970282..86843192 100644
+--- a/server/crypto.c
++++ b/server/crypto.c
+@@ -65,9 +65,6 @@
+ #else
+ #define TRY_KTLS 0
+ #endif
+-#if TRY_KTLS
+-#include <gnutls/socket.h>
+-#endif
+ 
+ static int crypto_auth;
+ #define CRYPTO_AUTH_CERTIFICATES 1
+-- 
+2.43.0
+
