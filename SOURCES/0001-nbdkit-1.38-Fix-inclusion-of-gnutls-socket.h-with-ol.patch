@@ -42,5 +42,5 @@ index 83970282..86843192 100644
  static int crypto_auth;
  #define CRYPTO_AUTH_CERTIFICATES 1
 -- 
-2.43.0
+2.47.1
 

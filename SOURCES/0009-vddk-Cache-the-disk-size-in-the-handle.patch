@@ -1,0 +1,60 @@
+From 05b40b982880ec05ee1e333fd9bb4966e5e31cb9 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Mon, 6 Jan 2025 16:47:55 +0000
+Subject: [PATCH] vddk: Cache the disk size in the handle
+
+No functional change here, we're just making sure we have the disk
+size (in bytes) available in the handle.
+
+Acked-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit 2ba76db4a048471e997e508715081a70356f94f3)
+(cherry picked from commit 927cb4063da464aa2605ae87d1b1157146551a47)
+---
+ plugins/vddk/vddk.c | 6 +++---
+ plugins/vddk/vddk.h | 3 +++
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/plugins/vddk/vddk.c b/plugins/vddk/vddk.c
+index d9fd7186..1175865d 100644
+--- a/plugins/vddk/vddk.c
++++ b/plugins/vddk/vddk.c
+@@ -862,19 +862,19 @@ vddk_get_size (void *handle)
+ {
+   struct vddk_handle *h = handle;
+   VixDiskLibInfo *info;
+-  int64_t size;
+   struct command info_cmd = { .type = INFO, .ptr = &info };
+ 
+   if (send_command_and_wait (h, &info_cmd) == -1)
+     return -1;
+ 
+-  size = info->capacity * (int64_t)VIXDISKLIB_SECTOR_SIZE;
++  /* Compute the size and cache it into the handle. */
++  h->size = info->capacity * VIXDISKLIB_SECTOR_SIZE;
+ 
+   VDDK_CALL_START (VixDiskLib_FreeInfo, "info")
+     VixDiskLib_FreeInfo (info);
+   VDDK_CALL_END (VixDiskLib_FreeInfo, 0);
+ 
+-  return size;
++  return h->size;
+ }
+ 
+ /* Advertise most efficient block sizes. */
+diff --git a/plugins/vddk/vddk.h b/plugins/vddk/vddk.h
+index fb0c79a8..1d1069cc 100644
+--- a/plugins/vddk/vddk.h
++++ b/plugins/vddk/vddk.h
+@@ -165,6 +165,9 @@ struct vddk_handle {
+   command_queue commands;          /* command queue */
+   pthread_cond_t commands_cond;    /* condition (queue size 0 -> 1) */
+   uint64_t id;                     /* next command ID */
++
++  /* Cached disk size in bytes (set in get_size()). */
++  uint64_t size;
+ };
+ 
+ /* reexec.c */
+-- 
+2.47.1
+

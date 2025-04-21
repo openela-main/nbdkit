@@ -1,0 +1,32 @@
+From c300385161e27b8e8530d87f64f62110a626c918 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Mon, 6 Jan 2025 16:39:51 +0000
+Subject: [PATCH] vddk: do_extents: Exit the function if we hit req_one
+ condition
+
+No change to the functionality, since the code previously called
+'return 0' immediately following the loop.
+
+Acked-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit 2f4d71f8f704d89d69cd635791c3239d2f44d631)
+(cherry picked from commit 6dd8b5eb14c0723764dd39597d64f62162ca3ab3)
+---
+ plugins/vddk/worker.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/plugins/vddk/worker.c b/plugins/vddk/worker.c
+index bc015d16..112111e3 100644
+--- a/plugins/vddk/worker.c
++++ b/plugins/vddk/worker.c
+@@ -471,7 +471,7 @@ do_extents (struct command *cmd, struct vddk_handle *h)
+      * overlapping the original offset we're done.
+      */
+     if (req_one && position > offset)
+-      break;
++      return 0;
+   }
+ 
+   return 0;
+-- 
+2.47.1
+

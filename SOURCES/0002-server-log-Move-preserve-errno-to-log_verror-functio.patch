@@ -147,5 +147,5 @@ index 464e4f9a..9c1f667a 100644
  
  /* Note: preserves the previous value of errno. */
 -- 
-2.43.0
+2.47.1
 

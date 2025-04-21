@@ -56,7 +56,7 @@
 
 Name:           nbdkit
 Version:        1.38.3
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        NBD server
 
 License:        BSD-3-Clause
@@ -87,6 +87,12 @@ Patch0003:     0003-server-Rename-threadlocal_-set-get-_error-to-._errno.patch
 Patch0004:     0004-server-Introduce-threadlocal_-set-get-_last_error.patch
 Patch0005:     0005-server-Take-a-thread-local-copy-of-the-last-call-to-.patch
 Patch0006:     0006-server-Send-the-last-error-to-the-NBD-client.patch
+Patch0007:     0007-tests-test-ext2-exportname.sh-Ignore-libnbd-1.8-for-.patch
+Patch0008:     0008-vddk-Include-stdbool.h.patch
+Patch0009:     0009-vddk-Cache-the-disk-size-in-the-handle.patch
+Patch0010:     0010-vddk-do_extents-Mark-some-local-variables-const.patch
+Patch0011:     0011-vddk-do_extents-Exit-the-function-if-we-hit-req_one-.patch
+Patch0012:     0012-vddk-do_extents-Avoid-reading-partial-chunk-beyond-t.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -1505,6 +1511,11 @@ fi
 
 
 %changelog
+* Mon Mar 10 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.3-2
+- vddk: Avoid reading partial chunk beyond the end of the disk
+  resolves: RHEL-82831
+- Fix tests/test-ext2-exportname.sh.
+
 * Fri Jul 26 2024 Richard W.M. Jones <rjones@redhat.com> - 1.38.3-1
 - Rebase to 1.38.3 (along stable branch)
 - Send the last error to the NBD client
