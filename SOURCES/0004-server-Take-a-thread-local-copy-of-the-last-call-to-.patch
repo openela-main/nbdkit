@@ -1,4 +1,4 @@
-From a0e3f9d58142b8c5e7bcc9b73da60778e6503d0b Mon Sep 17 00:00:00 2001
+From 4cde9d78c4293e294f80376266cfce420f15a6ff Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Tue, 23 Jul 2024 15:28:06 +0100
 Subject: [PATCH] server: Take a thread-local copy of the last call to
@@ -91,5 +91,5 @@ index 677da05c..d428bfc8 100644
    case NBD_CMD_READ:
      if (backend_pread (c, buf, count, offset, 0, &err) == -1)
 -- 
-2.47.1
+2.43.0
 

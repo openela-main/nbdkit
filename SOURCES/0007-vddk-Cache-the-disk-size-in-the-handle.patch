@@ -1,4 +1,4 @@
-From 05b40b982880ec05ee1e333fd9bb4966e5e31cb9 Mon Sep 17 00:00:00 2001
+From 927cb4063da464aa2605ae87d1b1157146551a47 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Mon, 6 Jan 2025 16:47:55 +0000
 Subject: [PATCH] vddk: Cache the disk size in the handle
@@ -8,17 +8,16 @@ size (in bytes) available in the handle.
 
 Acked-by: Eric Blake <eblake@redhat.com>
 (cherry picked from commit 2ba76db4a048471e997e508715081a70356f94f3)
-(cherry picked from commit 927cb4063da464aa2605ae87d1b1157146551a47)
 ---
  plugins/vddk/vddk.c | 6 +++---
  plugins/vddk/vddk.h | 3 +++
  2 files changed, 6 insertions(+), 3 deletions(-)
 
 diff --git a/plugins/vddk/vddk.c b/plugins/vddk/vddk.c
-index d9fd7186..1175865d 100644
+index 27d53bd6..2a787453 100644
 --- a/plugins/vddk/vddk.c
 +++ b/plugins/vddk/vddk.c
-@@ -862,19 +862,19 @@ vddk_get_size (void *handle)
+@@ -875,19 +875,19 @@ vddk_get_size (void *handle)
  {
    struct vddk_handle *h = handle;
    VixDiskLibInfo *info;
@@ -56,5 +55,5 @@ index fb0c79a8..1d1069cc 100644
  
  /* reexec.c */
 -- 
-2.47.1
+2.43.0
 

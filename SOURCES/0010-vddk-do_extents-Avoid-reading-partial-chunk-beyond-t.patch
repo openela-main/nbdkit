@@ -1,4 +1,4 @@
-From a4e715715ddace3dfa4f8f0c21e369862e250988 Mon Sep 17 00:00:00 2001
+From fdc2a6a9818aad25ee606118d5f6a32fa0739912 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Mon, 6 Jan 2025 15:45:35 +0000
 Subject: [PATCH] vddk: do_extents: Avoid reading partial chunk beyond the end
@@ -16,7 +16,6 @@ Fixes: https://issues.redhat.com/browse/RHEL-71694
 Reported-by: Ming Xie <mxie@redhat.com>
 Acked-by: Eric Blake <eblake@redhat.com>
 (cherry picked from commit fd918f3d1a185fd996999766c75acb9d6e22395d)
-(cherry picked from commit fdc2a6a9818aad25ee606118d5f6a32fa0739912)
 ---
  plugins/vddk/worker.c                   | 29 ++++++++-
  tests/Makefile.am                       |  5 +-
@@ -81,7 +80,7 @@ index 112111e3..8a91250a 100644
  }
  
 diff --git a/tests/Makefile.am b/tests/Makefile.am
-index 9c321fcb..ba0fb2b6 100644
+index d510807c..0aa36846 100644
 --- a/tests/Makefile.am
 +++ b/tests/Makefile.am
 @@ -178,7 +178,8 @@ if HAVE_VDDK
@@ -199,5 +198,5 @@ index 00000000..28fccd6c
 +    196608       65536    3  hole,zero
 +    262144        1536    0  data"
 -- 
-2.47.1
+2.43.0
 

@@ -1,4 +1,4 @@
-From f39c63a79ffb888bd565eb49b0ee2590fad8fbb9 Mon Sep 17 00:00:00 2001
+From e97b5ec6e7e7406688f68a5828e66ef46046fd9f Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Tue, 23 Jul 2024 14:46:41 +0100
 Subject: [PATCH] server: log: Move preserve errno to log_verror function
@@ -147,5 +147,5 @@ index 464e4f9a..9c1f667a 100644
  
  /* Note: preserves the previous value of errno. */
 -- 
-2.47.1
+2.43.0
 

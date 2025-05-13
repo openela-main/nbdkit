@@ -55,7 +55,7 @@
 %global source_directory 1.38-stable
 
 Name:           nbdkit
-Version:        1.38.3
+Version:        1.38.5
 Release:        2%{?dist}
 Summary:        NBD server
 
@@ -78,21 +78,19 @@ Source2:        libguestfs.keyring
 Source3:        copy-patches.sh
 
 # Patches come from the upstream repository:
-# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.5/
+# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.6/
 
 # Patches.
-Patch0001:     0001-nbdkit-1.38-Fix-inclusion-of-gnutls-socket.h-with-ol.patch
-Patch0002:     0002-server-log-Move-preserve-errno-to-log_verror-functio.patch
-Patch0003:     0003-server-Rename-threadlocal_-set-get-_error-to-._errno.patch
-Patch0004:     0004-server-Introduce-threadlocal_-set-get-_last_error.patch
-Patch0005:     0005-server-Take-a-thread-local-copy-of-the-last-call-to-.patch
-Patch0006:     0006-server-Send-the-last-error-to-the-NBD-client.patch
-Patch0007:     0007-tests-test-ext2-exportname.sh-Ignore-libnbd-1.8-for-.patch
-Patch0008:     0008-vddk-Include-stdbool.h.patch
-Patch0009:     0009-vddk-Cache-the-disk-size-in-the-handle.patch
-Patch0010:     0010-vddk-do_extents-Mark-some-local-variables-const.patch
-Patch0011:     0011-vddk-do_extents-Exit-the-function-if-we-hit-req_one-.patch
-Patch0012:     0012-vddk-do_extents-Avoid-reading-partial-chunk-beyond-t.patch
+Patch0001:     0001-server-log-Move-preserve-errno-to-log_verror-functio.patch
+Patch0002:     0002-server-Rename-threadlocal_-set-get-_error-to-._errno.patch
+Patch0003:     0003-server-Introduce-threadlocal_-set-get-_last_error.patch
+Patch0004:     0004-server-Take-a-thread-local-copy-of-the-last-call-to-.patch
+Patch0005:     0005-server-Send-the-last-error-to-the-NBD-client.patch
+Patch0006:     0006-vddk-Include-stdbool.h.patch
+Patch0007:     0007-vddk-Cache-the-disk-size-in-the-handle.patch
+Patch0008:     0008-vddk-do_extents-Mark-some-local-variables-const.patch
+Patch0009:     0009-vddk-do_extents-Exit-the-function-if-we-hit-req_one-.patch
+Patch0010:     0010-vddk-do_extents-Avoid-reading-partial-chunk-beyond-t.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -1511,10 +1509,12 @@ fi
 
 
 %changelog
-* Mon Mar 10 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.3-2
+* Mon Jan 06 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-2
 - vddk: Avoid reading partial chunk beyond the end of the disk
-  resolves: RHEL-82831
-- Fix tests/test-ext2-exportname.sh.
+  resolves: RHEL-71694
+
+* Sat Sep 28 2024 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-1
+- Rebase to 1.38.5 (along stable branch)
 
 * Fri Jul 26 2024 Richard W.M. Jones <rjones@redhat.com> - 1.38.3-1
 - Rebase to 1.38.3 (along stable branch)

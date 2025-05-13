@@ -1,4 +1,4 @@
-From c300385161e27b8e8530d87f64f62110a626c918 Mon Sep 17 00:00:00 2001
+From 6dd8b5eb14c0723764dd39597d64f62162ca3ab3 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Mon, 6 Jan 2025 16:39:51 +0000
 Subject: [PATCH] vddk: do_extents: Exit the function if we hit req_one
@@ -9,7 +9,6 @@ No change to the functionality, since the code previously called
 
 Acked-by: Eric Blake <eblake@redhat.com>
 (cherry picked from commit 2f4d71f8f704d89d69cd635791c3239d2f44d631)
-(cherry picked from commit 6dd8b5eb14c0723764dd39597d64f62162ca3ab3)
 ---
  plugins/vddk/worker.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
@@ -28,5 +27,5 @@ index bc015d16..112111e3 100644
  
    return 0;
 -- 
-2.47.1
+2.43.0
 

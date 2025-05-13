@@ -1,4 +1,4 @@
-From 334ab902477a0e1db4d70a5c809eafe49ab1fc6e Mon Sep 17 00:00:00 2001
+From 00107f9d36fc6a1b33a1bde25e3239c520b82ab1 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Wed, 24 Jul 2024 10:37:58 +0100
 Subject: [PATCH] server: Introduce threadlocal_{set,get}_last_error
@@ -91,5 +91,5 @@ index 9bb656bc..74a3c4e5 100644
   * size is increased to ‘size’ bytes if required.
   *
 -- 
-2.47.1
+2.43.0
 

@@ -1,4 +1,4 @@
-From 179227c7d6b0677dcd1dced55881e0d024745424 Mon Sep 17 00:00:00 2001
+From ae28c97079cce7792c5954f67a418402a48ed0cf Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Wed, 24 Jul 2024 10:29:13 +0100
 Subject: [PATCH] server: Rename threadlocal_{set,get}_error to .._errno
@@ -173,5 +173,5 @@ index 088fe55a..9bb656bc 100644
    int err = errno;
    struct threadlocal *threadlocal = pthread_getspecific (threadlocal_key);
 -- 
-2.47.1
+2.43.0
 
