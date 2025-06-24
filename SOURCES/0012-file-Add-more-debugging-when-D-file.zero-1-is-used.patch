@@ -1,0 +1,37 @@
+From eebfe03293d7fd08e167bdbb2ab8b8e448393bdf Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 1 May 2025 10:21:23 +0100
+Subject: [PATCH] file: Add more debugging when -D file.zero=1 is used
+
+(cherry picked from commit ecf6b15fa84a02b74ea969f06552c82ee418b9b4)
+(cherry picked from commit 1cb341e75c1a17553b69ea8d9889662e6d09ae78)
+---
+ plugins/file/file.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/file/file.c b/plugins/file/file.c
+index 7ed4e71b..3668fa4b 100644
+--- a/plugins/file/file.c
++++ b/plugins/file/file.c
+@@ -856,7 +856,17 @@ file_pwrite (void *handle, const void *buf, uint32_t count, uint64_t offset,
+ static int
+ do_fallocate (int fd, int mode_, off_t offset, off_t len)
+ {
+-  int r = fallocate (fd, mode_, offset, len);
++  int r;
++
++  r = fallocate (fd, mode_, offset, len);
++
++  if (file_debug_zero)
++    nbdkit_debug ("fallocate ([%s%s ], %" PRIu64 ", %" PRIu64") => %d (%d)",
++                  mode_ & FALLOC_FL_PUNCH_HOLE ? " FALLOC_FL_PUNCH_HOLE" : "",
++                  mode_ & FALLOC_FL_ZERO_RANGE ? " FALLOC_FL_ZERO_RANGE" : "",
++                  (uint64_t) offset, (uint64_t) len, r,
++                  r == -1 ? errno : 0);
++
+   if (r == -1 && errno == ENODEV) {
+     /* kernel 3.10 fails with ENODEV for block device. Kernel >= 4.9 fails
+        with EOPNOTSUPP in this case. Normalize errno to simplify callers. */
+-- 
+2.47.1
+

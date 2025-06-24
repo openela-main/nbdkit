@@ -56,7 +56,7 @@
 
 Name:           nbdkit
 Version:        1.38.5
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        NBD server
 
 License:        BSD-3-Clause
@@ -91,6 +91,13 @@ Patch0007:     0007-vddk-Cache-the-disk-size-in-the-handle.patch
 Patch0008:     0008-vddk-do_extents-Mark-some-local-variables-const.patch
 Patch0009:     0009-vddk-do_extents-Exit-the-function-if-we-hit-req_one-.patch
 Patch0010:     0010-vddk-do_extents-Avoid-reading-partial-chunk-beyond-t.patch
+Patch0011:     0011-file-Fix-minor-typo-in-debug-message.patch
+Patch0012:     0012-file-Add-more-debugging-when-D-file.zero-1-is-used.patch
+Patch0013:     0013-file-Fix-comment-style-in-a-few-places.patch
+Patch0014:     0014-file-Fix-do_fallocate-debugging-on-Alpine.patch
+Patch0015:     0015-file-Rename-h-can_zeroout-to-h-can_blkzeroout-to-ref.patch
+Patch0016:     0016-file-zero-Document-implicit-order-that-we-will-try-z.patch
+Patch0017:     0017-file-zero-Use-BLKDISCARD-method-if-may_trim-is-set.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -1509,6 +1516,10 @@ fi
 
 
 %changelog
+* Tue May 13 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-3
+- file: zero: Use BLKDISCARD method if may_trim is set
+  resolves: RHEL-91094
+
 * Mon Jan 06 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-2
 - vddk: Avoid reading partial chunk beyond the end of the disk
   resolves: RHEL-71694

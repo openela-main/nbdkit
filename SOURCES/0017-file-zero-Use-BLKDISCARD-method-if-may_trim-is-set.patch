@@ -1,0 +1,123 @@
+From 26598004453d1d35c70229ade48a085a74b3dada Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 1 May 2025 10:36:23 +0100
+Subject: [PATCH] file: zero: Use BLKDISCARD method if may_trim is set
+
+If we're allowed to trim and we're writing to a block device,
+previously we hit the case fallocate(FALLOC_FL_ZERO_RANGE) first.
+This succeeds in Linux, zeroing (not trimming) the range.
+
+However it would be better to trim in this case.  Linux supports
+ioctl(BLKDISCARD) on block devices, so try this method first.
+
+Fixes: https://issues.redhat.com/browse/RHEL-89353
+Reported-by: Germano Veit Michel
+Thanks: Eric Blake
+(cherry picked from commit 7a9ecda24906c64d9f8c7238a96cb3f686e894eb)
+(cherry picked from commit 396e8a97835155a620cabbcf1aabaaa1fa4a08f1)
+---
+ plugins/file/file.c                 | 50 +++++++++++++++++++++++++++++
+ plugins/file/nbdkit-file-plugin.pod |  5 +++
+ 2 files changed, 55 insertions(+)
+
+diff --git a/plugins/file/file.c b/plugins/file/file.c
+index e5fd864f..41b23457 100644
+--- a/plugins/file/file.c
++++ b/plugins/file/file.c
+@@ -376,6 +376,9 @@ file_dump_plugin (void)
+ #ifdef BLKSSZGET
+   printf ("file_blksszget=yes\n");
+ #endif
++#ifdef BLKDISCARD
++  printf ("file_blkdiscard=yes\n");
++#endif
+ #ifdef BLKZEROOUT
+   printf ("file_blkzeroout=yes\n");
+ #endif
+@@ -476,6 +479,7 @@ struct handle {
+   bool can_punch_hole;
+   bool can_zero_range;
+   bool can_fallocate;
++  bool can_blkdiscard;
+   bool can_blkzeroout;
+ };
+ 
+@@ -683,6 +687,7 @@ file_open (int readonly)
+ 
+   h->can_fallocate = true;
+   h->can_blkzeroout = h->is_block_device;
++  h->can_blkdiscard = h->is_block_device;
+ 
+   return h;
+ }
+@@ -921,6 +926,51 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+   }
+ #endif
+ 
++#if defined(BLKDISCARD) && defined(FALLOC_FL_ZERO_RANGE)
++  /* For aligned range and block device, we can use BLKDISCARD to
++   * trim.  However BLKDISCARD doesn't necessarily zero (eg for local
++   * disk) so we have to zero first and then discard.
++   *
++   * In future all Linux block devices may understand
++   * FALLOC_FL_PUNCH_HOLE which means this case would no longer be
++   * necessary, since the case above will handle it.
++   */
++  if (may_trim && h->can_blkdiscard && h->can_zero_range &&
++      IS_ALIGNED (offset | count, h->sector_size)) {
++    int r;
++    uint64_t range[2] = {offset, count};
++
++    r = do_fallocate (h->fd, FALLOC_FL_ZERO_RANGE, offset, count);
++    if (r == 0) {
++      /* We could use FALLOC_FL_PUNCH_HOLE here instead, but currently
++       * thin LVs do not support it (XXX 2025-04).
++       */
++      r = ioctl (h->fd, BLKDISCARD, &range);
++      if (r == 0) {
++        if (file_debug_zero)
++          nbdkit_debug ("h->can_blkdiscard && may_trim && IS_ALIGNED: "
++                        "zero succeeded using BLKDISCARD");
++        goto out;
++      }
++
++      if (!is_enotsup (errno)) {
++        nbdkit_error ("zero: %m");
++        return -1;
++      }
++
++      h->can_blkdiscard = false;
++    }
++    else {
++      if (!is_enotsup (errno)) {
++        nbdkit_error ("zero: %m");
++        return -1;
++      }
++
++      h->can_fallocate = false;
++    }
++  }
++#endif
++
+ #ifdef FALLOC_FL_ZERO_RANGE
+   if (h->can_zero_range) {
+     int r;
+diff --git a/plugins/file/nbdkit-file-plugin.pod b/plugins/file/nbdkit-file-plugin.pod
+index a50bef2d..0e260b7f 100644
+--- a/plugins/file/nbdkit-file-plugin.pod
++++ b/plugins/file/nbdkit-file-plugin.pod
+@@ -227,6 +227,11 @@ future.
+ If both set, the plugin may be able to efficiently zero ranges of
+ block devices, where the driver and block device itself supports this.
+ 
++=item C<file_blkdiscard=yes>
++
++If set, the plugin may be able to efficiently trim ranges of block
++devices, where the driver and block device itself supports this.
++
+ =item C<file_extents=yes>
+ 
+ If set, the plugin can read file extents.
+-- 
+2.47.1
+

@@ -1,0 +1,44 @@
+From fc302722b01afbf498746c7baf065d8103ce6ac7 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 1 May 2025 10:32:17 +0100
+Subject: [PATCH] file: Fix comment style in a few places
+
+No actual change here.
+
+(cherry picked from commit 0df4142c4be2b059c4d17aae0ec71f16ffc9ba35)
+(cherry picked from commit 664e447d858a21304610db3023cc728db0c974bd)
+---
+ plugins/file/file.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/plugins/file/file.c b/plugins/file/file.c
+index 3668fa4b..8b63184f 100644
+--- a/plugins/file/file.c
++++ b/plugins/file/file.c
+@@ -869,7 +869,8 @@ do_fallocate (int fd, int mode_, off_t offset, off_t len)
+ 
+   if (r == -1 && errno == ENODEV) {
+     /* kernel 3.10 fails with ENODEV for block device. Kernel >= 4.9 fails
+-       with EOPNOTSUPP in this case. Normalize errno to simplify callers. */
++     * with EOPNOTSUPP in this case. Normalize errno to simplify callers.
++     */
+     errno = EOPNOTSUPP;
+   }
+   return r;
+@@ -926,9 +927,10 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+ #endif
+ 
+ #ifdef FALLOC_FL_PUNCH_HOLE
+-  /* If we can punch hole but may not trim, we can combine punching hole and
+-   * fallocate to zero a range. This is expected to be more efficient than
+-   * writing zeroes manually. */
++  /* If we can punch hole but may not trim, we can combine punching
++   * hole and fallocate to zero a range. This is expected to be more
++   * efficient than writing zeroes manually.
++   */
+   if (h->can_punch_hole && h->can_fallocate) {
+     int r;
+ 
+-- 
+2.47.1
+
