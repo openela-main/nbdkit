@@ -56,7 +56,7 @@
 
 Name:           nbdkit
 Version:        1.38.5
-Release:        3%{?dist}
+Release:        5%{?dist}
 Summary:        NBD server
 
 License:        BSD-3-Clause
@@ -98,6 +98,8 @@ Patch0014:     0014-file-Fix-do_fallocate-debugging-on-Alpine.patch
 Patch0015:     0015-file-Rename-h-can_zeroout-to-h-can_blkzeroout-to-ref.patch
 Patch0016:     0016-file-zero-Document-implicit-order-that-we-will-try-z.patch
 Patch0017:     0017-file-zero-Use-BLKDISCARD-method-if-may_trim-is-set.patch
+Patch0018:     0018-server-Fix-.zero-fallback-path.patch
+Patch0019:     0019-vddk-Add-support-for-VDDK-9.0.0.0.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -1516,6 +1518,14 @@ fi
 
 
 %changelog
+* Mon Jul 14 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-5
+- Support VDDK 9
+  resolves: RHEL-103420
+
+* Sat Jul 05 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-4
+- server: Fix .zero fallback path
+  resolves: RHEL-101702
+
 * Tue May 13 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-3
 - file: zero: Use BLKDISCARD method if may_trim is set
   resolves: RHEL-91094
