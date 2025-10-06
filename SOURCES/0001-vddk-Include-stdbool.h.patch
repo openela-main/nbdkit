@@ -1,0 +1,28 @@
+From 9f86b51b4d8110ee82f2c67c3939c85ce0ec1ea9 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Mon, 6 Jan 2025 15:22:05 +0000
+Subject: [PATCH] vddk: Include <stdbool.h>
+
+Since this file uses booleans.
+
+Acked-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit fe855addae44e45e2344a33bd3857c561587f12e)
+---
+ plugins/vddk/worker.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/plugins/vddk/worker.c b/plugins/vddk/worker.c
+index 467d00ca..5982fcea 100644
+--- a/plugins/vddk/worker.c
++++ b/plugins/vddk/worker.c
+@@ -34,6 +34,7 @@
+ 
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <stdbool.h>
+ #include <stdint.h>
+ #include <inttypes.h>
+ 
+-- 
+2.47.1
+

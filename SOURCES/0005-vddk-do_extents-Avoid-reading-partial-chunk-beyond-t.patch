@@ -1,0 +1,202 @@
+From fe65a789da92e53bfd3f3814f1c93566f69591db Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Mon, 6 Jan 2025 15:45:35 +0000
+Subject: [PATCH] vddk: do_extents: Avoid reading partial chunk beyond the end
+ of the disk
+
+The QueryAllocatedBlocks API has (another) frustrating feature.  It
+can only query whole "chunks" (128 sectors).  If the disk size is not
+aligned to the chunk size (say the size was 129 sectors) then there's
+a bit at the end which cannot be queried.  Furthermore, the API gives
+an error in this case instead of being helpful:
+
+  VixDiskLib_QueryAllocatedBlocks: One of the parameters was invalid
+
+Fixes: https://issues.redhat.com/browse/RHEL-71694
+Reported-by: Ming Xie <mxie@redhat.com>
+Acked-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit fd918f3d1a185fd996999766c75acb9d6e22395d)
+---
+ plugins/vddk/worker.c                   | 29 ++++++++-
+ tests/Makefile.am                       |  5 +-
+ tests/test-vddk-real-unaligned-chunk.sh | 82 +++++++++++++++++++++++++
+ 3 files changed, 113 insertions(+), 3 deletions(-)
+ create mode 100755 tests/test-vddk-real-unaligned-chunk.sh
+
+diff --git a/plugins/vddk/worker.c b/plugins/vddk/worker.c
+index 112111e3..8a91250a 100644
+--- a/plugins/vddk/worker.c
++++ b/plugins/vddk/worker.c
+@@ -392,10 +392,9 @@ do_extents (struct command *cmd, struct vddk_handle *h)
+   const uint64_t offset = cmd->offset;
+   const bool req_one = cmd->req_one;
+   struct nbdkit_extents *extents = cmd->ptr;
+-  uint64_t position, end, start_sector;
++  uint64_t position, start_sector, size_sectors, last_queryable_sector, end;
+ 
+   position = offset;
+-  end = offset + count;
+ 
+   /* We can only query whole chunks.  Therefore start with the
+    * first chunk before offset.
+@@ -403,6 +402,21 @@ do_extents (struct command *cmd, struct vddk_handle *h)
+   start_sector =
+     ROUND_DOWN (offset, VIXDISKLIB_MIN_CHUNK_SIZE * VIXDISKLIB_SECTOR_SIZE)
+     / VIXDISKLIB_SECTOR_SIZE;
++
++  /* Calculate the end byte + 1 that we're going to query, normally
++   * this is offset + count.
++   *
++   * However since chunks are larger than sectors, for a disk which
++   * has size which is not aligned to the chunk size there is a part
++   * of the disk at the end that we can never query.  Reduce 'end' to
++   * the maximum possible queryable part of the disk, and we'll deal
++   * with the unaligned bit after the loop (RHEL-71694).
++   */
++  end = offset + count;
++  size_sectors = h->size / VIXDISKLIB_SECTOR_SIZE;
++  last_queryable_sector = ROUND_DOWN (size_sectors, VIXDISKLIB_MIN_CHUNK_SIZE);
++  end = MIN (end, last_queryable_sector * VIXDISKLIB_SECTOR_SIZE);
++
+   while (start_sector * VIXDISKLIB_SECTOR_SIZE < end) {
+     VixError err;
+     uint32_t i;
+@@ -474,6 +488,17 @@ do_extents (struct command *cmd, struct vddk_handle *h)
+       return 0;
+   }
+ 
++  /* If 'end' spanned beyond the last chunk of the disk, then we
++   * reduced it above to avoid reading a chunk that extends beyond the
++   * end of the underlying disk.  We have to synthesize an allocated
++   * block here, which is what VDDK's example code does
++   * (doc/samples/diskLib/vixDiskLibSample.cpp: DoGetAllocatedBlocks).
++   */
++  if (end < offset + count) {
++    if (add_extent (extents, &position, offset + count, false) == -1)
++      return -1;
++  }
++
+   return 0;
+ }
+ 
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index c0d1bdcc..94d4a219 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -188,7 +188,8 @@ if HAVE_VDDK
+ check-vddk:
+ 	$(MAKE) check TESTS="test-vddk-real.sh \
+ 	                     test-vddk-real-dump-plugin.sh \
+-	                     test-vddk-real-create.sh"
++	                     test-vddk-real-create.sh \
++	                     test-vddk-real-unaligned-chunk.sh"
+ endif HAVE_VDDK
+ 
+ #----------------------------------------------------------------------
+@@ -1172,6 +1173,7 @@ TESTS += \
+ 	test-vddk-password-interactive.sh \
+ 	test-vddk-real-create.sh \
+ 	test-vddk-real-dump-plugin.sh \
++	test-vddk-real-unaligned-chunk.sh \
+ 	test-vddk-real.sh \
+ 	test-vddk-reexec.sh \
+ 	test-vddk-run.sh \
+@@ -1204,6 +1206,7 @@ EXTRA_DIST += \
+ 	test-vddk-password-interactive.sh \
+ 	test-vddk-real-create.sh \
+ 	test-vddk-real-dump-plugin.sh \
++	test-vddk-real-unaligned-chunk.sh \
+ 	test-vddk-real.sh \
+ 	test-vddk-reexec.sh \
+ 	test-vddk-run.sh \
+diff --git a/tests/test-vddk-real-unaligned-chunk.sh b/tests/test-vddk-real-unaligned-chunk.sh
+new file mode 100755
+index 00000000..28fccd6c
+--- /dev/null
++++ b/tests/test-vddk-real-unaligned-chunk.sh
+@@ -0,0 +1,82 @@
++#!/usr/bin/env bash
++# nbdkit
++# Copyright Red Hat
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met:
++#
++# * Redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer.
++#
++# * Redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution.
++#
++# * Neither the name of Red Hat nor the names of its contributors may be
++# used to endorse or promote products derived from this software without
++# specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++# SUCH DAMAGE.
++
++# Regression test for https://issues.redhat.com/browse/RHEL-71694
++
++source ./functions.sh
++set -e
++set -x
++
++requires_run
++requires test "x$vddkdir" != "x"
++requires test -d "$vddkdir"
++requires test -f "$vddkdir/lib64/libvixDiskLib.so"
++requires qemu-img --version
++requires_nbdinfo
++requires $TRUNCATE --version
++requires dd --version
++requires test -r /dev/urandom
++skip_if_valgrind "because setting LD_LIBRARY_PATH breaks valgrind"
++
++# VDDK > 5.1.1 only supports x86_64.
++if [ `uname -m` != "x86_64" ]; then
++    echo "$0: unsupported architecture"
++    exit 77
++fi
++
++d=vddk-real-unaligned-chunk.d
++cleanup_fn rm -rf $d
++rm -rf $d
++mkdir $d
++
++# Create a vmdk disk which is partially sparse and the size is NOT
++# aligned to 128 sectors (chunk size).
++dd if=/dev/urandom of=$d/test.raw bs=512 count=$(( 3*128 ))
++$TRUNCATE -s $(( (4*128 + 3) * 512)) $d/test.raw
++qemu-img convert -f raw $d/test.raw -O vmdk $d/test.vmdk
++
++# Read the map using VDDK.
++export d
++nbdkit -rfv vddk libdir="$vddkdir" \
++       $PWD/$d/test.vmdk \
++       --run 'nbdinfo --map "$uri" > $d/map'
++cat $d/map
++
++# Note a few features of the expected map.  The first 3 chunks (3*128
++# sectors) are allocated, followed by a single hole chunk.  Then the
++# last 3 unaligned sectors appear allocated (even though they are not)
++# because we could not read them using the QueryAllocatedBlocks API so
++# we had to assume allocated.
++test "$(cat $d/map)" = "\
++         0      196608    0  data
++    196608       65536    3  hole,zero
++    262144        1536    0  data"
+-- 
+2.47.1
+
