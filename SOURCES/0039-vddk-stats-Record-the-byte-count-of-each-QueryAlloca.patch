@@ -1,0 +1,61 @@
+From c721bf99917a3f33454ebdf683fa450f6d996202 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 8 Jun 2025 10:40:26 +0100
+Subject: [PATCH] vddk: stats: Record the byte count of each
+ QueryAllocatedBlocks call
+
+In -D vddk.stats=1 output, keep track of the size of each call to
+QueryAllocatedBlocks, and display that at the end.
+
+After this change, we see the number of bytes scanned in the "bytes"
+column (previously this column was empty for this call):
+
+nbdkit: debug: VixDiskLib_...                    us calls           bytes
+nbdkit: debug:   Open                      27051497     2
+nbdkit: debug:   GetInfo                   12538428     4
+nbdkit: debug:   ConnectEx                  6944819     2
+nbdkit: debug:   QueryAllocatedBlocks       4563503     3     21474967552
+nbdkit: debug:   Close                      1440271     2
+nbdkit: debug:   Exit                       1001407     1
+(cherry picked from commit 2db1ede27bb529b36b0075eab337f0c585d1a7ec)
+---
+ plugins/vddk/worker.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/plugins/vddk/worker.c b/plugins/vddk/worker.c
+index 3925fb91..feb8d96f 100644
+--- a/plugins/vddk/worker.c
++++ b/plugins/vddk/worker.c
+@@ -327,7 +327,8 @@ test_can_extents (struct vddk_handle *h)
+                                            0, VIXDISKLIB_MIN_CHUNK_SIZE,
+                                            VIXDISKLIB_MIN_CHUNK_SIZE,
+                                            &block_list);
+-  VDDK_CALL_END (VixDiskLib_QueryAllocatedBlocks, 0);
++  VDDK_CALL_END (VixDiskLib_QueryAllocatedBlocks,
++                 VIXDISKLIB_MIN_CHUNK_SIZE * VIXDISKLIB_SECTOR_SIZE);
+   error_suppression = 0;
+   if (err == VIX_OK) {
+     VDDK_CALL_START (VixDiskLib_FreeBlockList, "block_list")
+@@ -435,7 +436,8 @@ get_extents_slow (struct command *cmd, struct vddk_handle *h)
+                                              start_sector, nr_sectors,
+                                              VIXDISKLIB_MIN_CHUNK_SIZE,
+                                              &block_list);
+-    VDDK_CALL_END (VixDiskLib_QueryAllocatedBlocks, 0);
++    VDDK_CALL_END (VixDiskLib_QueryAllocatedBlocks,
++                   nr_sectors * VIXDISKLIB_SECTOR_SIZE);
+     if (err != VIX_OK) {
+       VDDK_ERROR (err, "VixDiskLib_QueryAllocatedBlocks");
+       return -1;
+@@ -532,7 +534,8 @@ pre_cache_extents (struct vddk_handle *h)
+                                              start_sector, nr_sectors,
+                                              VIXDISKLIB_MIN_CHUNK_SIZE,
+                                              &block_list);
+-    VDDK_CALL_END (VixDiskLib_QueryAllocatedBlocks, 0);
++    VDDK_CALL_END (VixDiskLib_QueryAllocatedBlocks,
++                   nr_sectors * VIXDISKLIB_SECTOR_SIZE);
+     if (err != VIX_OK) {
+       VDDK_ERROR (err, "VixDiskLib_QueryAllocatedBlocks");
+       nbdkit_extents_free (extents);
+-- 
+2.47.1
+

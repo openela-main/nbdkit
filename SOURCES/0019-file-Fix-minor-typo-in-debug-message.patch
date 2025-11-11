@@ -1,19 +1,18 @@
-From 700c3c26a1d20a9e658f7c4eadf1122bc58807df Mon Sep 17 00:00:00 2001
+From a79bf57c8ec805516e8dbe7995aa2bd46b83ade3 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Thu, 1 May 2025 10:03:06 +0100
 Subject: [PATCH] file: Fix minor typo in debug message
 
 (cherry picked from commit a75db5636b94c9184f8eb02fd51182d935df64a6)
-(cherry picked from commit a79bf57c8ec805516e8dbe7995aa2bd46b83ade3)
 ---
  plugins/file/file.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/plugins/file/file.c b/plugins/file/file.c
-index 2bad6480..7ed4e71b 100644
+index 6bcc5537..71b349ac 100644
 --- a/plugins/file/file.c
 +++ b/plugins/file/file.c
-@@ -901,7 +901,7 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+@@ -924,7 +924,7 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
      r = do_fallocate (h->fd, FALLOC_FL_ZERO_RANGE, offset, count);
      if (r == 0) {
        if (file_debug_zero)

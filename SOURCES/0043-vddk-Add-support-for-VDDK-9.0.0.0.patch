@@ -1,21 +1,20 @@
-From 4e36ca88232609a0b15c3533328c93c0d41beab0 Mon Sep 17 00:00:00 2001
+From c33178791b9f66cb49082a496b5e65c6027f5ebd Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Mon, 23 Jun 2025 13:05:51 +0100
 Subject: [PATCH] vddk: Add support for VDDK 9.0.0.0
 
 (cherry picked from commit c966fe7d05ed7e992e1bf725d4625434c74eaf8d)
-(cherry picked from commit c33178791b9f66cb49082a496b5e65c6027f5ebd)
 ---
  plugins/vddk/nbdkit-vddk-plugin.pod | 2 +-
  plugins/vddk/vddk.c                 | 4 +++-
  2 files changed, 4 insertions(+), 2 deletions(-)
 
 diff --git a/plugins/vddk/nbdkit-vddk-plugin.pod b/plugins/vddk/nbdkit-vddk-plugin.pod
-index 19f25423..dc71431c 100644
+index 1e376140..a03f688a 100644
 --- a/plugins/vddk/nbdkit-vddk-plugin.pod
 +++ b/plugins/vddk/nbdkit-vddk-plugin.pod
-@@ -407,7 +407,7 @@ This is the first version that supported the
- C<VixDiskLib_QueryAllocatedBlocks> API.  This is required to provide
+@@ -405,7 +405,7 @@ This is also the first version that supported the
+ C<VixDiskLib_QueryAllocatedBlocks> API.  This is used to provide
  sparseness (extent) information over NBD.
  
 -=item VDDK 8.0.2.1 (released Feb 2024)
@@ -24,7 +23,7 @@ index 19f25423..dc71431c 100644
  This is the latest version of VDDK that we have tested at the time of
  writing, but the plugin should work with future versions.
 diff --git a/plugins/vddk/vddk.c b/plugins/vddk/vddk.c
-index 2a787453..367366c0 100644
+index bbf0af31..f5e22ae3 100644
 --- a/plugins/vddk/vddk.c
 +++ b/plugins/vddk/vddk.c
 @@ -78,7 +78,7 @@ NBDKIT_DLL_PUBLIC int vddk_debug_datapath = 1;

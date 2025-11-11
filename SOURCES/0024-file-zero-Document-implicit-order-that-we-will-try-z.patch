@@ -1,4 +1,4 @@
-From 8322b16cd13979f7c872d5ce50517688fc7220bd Mon Sep 17 00:00:00 2001
+From c1984ddcc6497c4446d1bf0e8828d1259852eb74 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Thu, 1 May 2025 10:30:41 +0100
 Subject: [PATCH] file: zero: Document implicit order that we will try zeroing
@@ -9,16 +9,15 @@ There's no substantive change here.  I just pulled out the test (flags
 we (will) try zero-with-trim methods first.
 
 (cherry picked from commit 61fc023f235b17f8a19302885d1613dd0a7a3793)
-(cherry picked from commit c1984ddcc6497c4446d1bf0e8828d1259852eb74)
 ---
  plugins/file/file.c | 7 ++++++-
  1 file changed, 6 insertions(+), 1 deletion(-)
 
 diff --git a/plugins/file/file.c b/plugins/file/file.c
-index 55941bb8..e5fd864f 100644
+index 70805bd7..3b82e02d 100644
 --- a/plugins/file/file.c
 +++ b/plugins/file/file.c
-@@ -893,9 +893,14 @@ static int
+@@ -916,9 +916,14 @@ static int
  file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
  {
    struct handle *h __attribute__ ((unused)) = handle;

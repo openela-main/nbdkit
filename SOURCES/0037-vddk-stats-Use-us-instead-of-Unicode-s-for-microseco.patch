@@ -1,0 +1,34 @@
+From bac77fb3da2aa6353b5b5a71a7b86bc83289bfc6 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 8 Jun 2025 10:44:32 +0100
+Subject: [PATCH] =?UTF-8?q?vddk:=20stats:=20Use=20"us"=20instead=20of=20(U?=
+ =?UTF-8?q?nicode)=20"=C2=B5s"=20for=20microseconds?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+nbdkit_debug uses C-style escaping for non-ASCII characters in debug
+strings, so in logs what we actually see is "\xc2\xb5s" which messes
+up the columns.
+
+(cherry picked from commit 1f09bb4abefe8f3f052e8c0b6b34d314887b3c32)
+---
+ plugins/vddk/stats.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/plugins/vddk/stats.c b/plugins/vddk/stats.c
+index 7f63333a..59cfee5a 100644
+--- a/plugins/vddk/stats.c
++++ b/plugins/vddk/stats.c
+@@ -98,7 +98,7 @@ display_stats (void)
+ 
+   nbdkit_debug ("VDDK function stats (-D vddk.stats=1):");
+   nbdkit_debug ("%-24s  %15s %5s %15s",
+-                "VixDiskLib_...", "µs", "calls", "bytes");
++                "VixDiskLib_...", "us", "calls", "bytes");
+   for (i = 0; i < stats.len; ++i) {
+     if (stats.ptr[i].usecs) {
+       if (stats.ptr[i].bytes > 0)
+-- 
+2.47.1
+

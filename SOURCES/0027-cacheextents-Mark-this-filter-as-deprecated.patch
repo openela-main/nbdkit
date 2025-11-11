@@ -1,0 +1,38 @@
+From 70df77c1abd92fccf0c5594f613f3e375c71c2b8 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sat, 31 May 2025 08:12:32 +0100
+Subject: [PATCH] cacheextents: Mark this filter as deprecated
+
+We will remove it in nbdkit 1.46.
+
+Its usage was removed from virt-v2v because we found that it did not
+do anything:
+https://github.com/libguestfs/virt-v2v/commit/48c4ce8e6cf6f1c390a48245ef0f99233f80cfe8
+
+(cherry picked from commit 9717c47999fb2f56c3569cf1cdd4d0c160f866c1)
+---
+ filters/cacheextents/nbdkit-cacheextents-filter.pod | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/filters/cacheextents/nbdkit-cacheextents-filter.pod b/filters/cacheextents/nbdkit-cacheextents-filter.pod
+index a2b2aa51..ebf0fbc5 100644
+--- a/filters/cacheextents/nbdkit-cacheextents-filter.pod
++++ b/filters/cacheextents/nbdkit-cacheextents-filter.pod
+@@ -6,6 +6,14 @@ nbdkit-cacheextents-filter - cache extents
+ 
+  nbdkit --filter=cacheextents plugin
+ 
++=head1 DEPRECATED
++
++B<The cacheextents filter is deprecated in S<nbdkit E<ge> 1.43.10> and
++will be removed in S<nbdkit 1.46>>.  There is no direct replacement,
++but as the filter only worked for a narrow and unusual range of access
++patterns it is likely that it has no effect and you can just stop
++using it.
++
+ =head1 DESCRIPTION
+ 
+ C<nbdkit-cacheextents-filter> is a filter that caches the result of last
+-- 
+2.47.1
+

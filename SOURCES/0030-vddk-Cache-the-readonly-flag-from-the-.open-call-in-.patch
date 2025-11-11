@@ -1,0 +1,41 @@
+From 6bfb320ff03dd89d1b9b584516b7e20830d2cdb5 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 30 May 2025 13:32:00 +0100
+Subject: [PATCH] vddk: Cache the readonly flag from the .open call in the
+ handle
+
+(cherry picked from commit 0d953ea644f44259edb19c97e3c7863794c0ca1c)
+---
+ plugins/vddk/vddk.c | 1 +
+ plugins/vddk/vddk.h | 3 +++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/plugins/vddk/vddk.c b/plugins/vddk/vddk.c
+index 2a787453..468971f4 100644
+--- a/plugins/vddk/vddk.c
++++ b/plugins/vddk/vddk.c
+@@ -699,6 +699,7 @@ vddk_open (int readonly)
+     nbdkit_error ("calloc: %m");
+     return NULL;
+   }
++  h->readonly = readonly;
+   h->commands = (command_queue) empty_vector;
+   pthread_mutex_init (&h->commands_lock, NULL);
+   pthread_cond_init (&h->commands_cond, NULL);
+diff --git a/plugins/vddk/vddk.h b/plugins/vddk/vddk.h
+index 1d1069cc..3586c5da 100644
+--- a/plugins/vddk/vddk.h
++++ b/plugins/vddk/vddk.h
+@@ -166,6 +166,9 @@ struct vddk_handle {
+   pthread_cond_t commands_cond;    /* condition (queue size 0 -> 1) */
+   uint64_t id;                     /* next command ID */
+ 
++  /* Cached readonly flag from the open call. */
++  int readonly;
++
+   /* Cached disk size in bytes (set in get_size()). */
+   uint64_t size;
+ };
+-- 
+2.47.1
+

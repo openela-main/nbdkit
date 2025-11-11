@@ -56,7 +56,7 @@
 
 Name:           nbdkit
 Version:        1.38.5
-Release:        5%{?dist}
+Release:        12%{?dist}
 Summary:        NBD server
 
 License:        BSD-3-Clause
@@ -78,7 +78,7 @@ Source2:        libguestfs.keyring
 Source3:        copy-patches.sh
 
 # Patches come from the upstream repository:
-# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.6/
+# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-9.7/
 
 # Patches.
 Patch0001:     0001-server-log-Move-preserve-errno-to-log_verror-functio.patch
@@ -91,15 +91,40 @@ Patch0007:     0007-vddk-Cache-the-disk-size-in-the-handle.patch
 Patch0008:     0008-vddk-do_extents-Mark-some-local-variables-const.patch
 Patch0009:     0009-vddk-do_extents-Exit-the-function-if-we-hit-req_one-.patch
 Patch0010:     0010-vddk-do_extents-Avoid-reading-partial-chunk-beyond-t.patch
-Patch0011:     0011-file-Fix-minor-typo-in-debug-message.patch
-Patch0012:     0012-file-Add-more-debugging-when-D-file.zero-1-is-used.patch
-Patch0013:     0013-file-Fix-comment-style-in-a-few-places.patch
-Patch0014:     0014-file-Fix-do_fallocate-debugging-on-Alpine.patch
-Patch0015:     0015-file-Rename-h-can_zeroout-to-h-can_blkzeroout-to-ref.patch
-Patch0016:     0016-file-zero-Document-implicit-order-that-we-will-try-z.patch
-Patch0017:     0017-file-zero-Use-BLKDISCARD-method-if-may_trim-is-set.patch
-Patch0018:     0018-server-Fix-.zero-fallback-path.patch
-Patch0019:     0019-vddk-Add-support-for-VDDK-9.0.0.0.patch
+Patch0011:     0011-file-Add-debugging-if-sync_file_range-posix_fadvise-.patch
+Patch0012:     0012-file-If-sync_file_range-fails-to-start-don-t-add-win.patch
+Patch0013:     0013-tests-Add-tests-of-file-plugin-cache-none.patch
+Patch0014:     0014-tests-Add-more-generic-tests-of-file-cache-none.patch
+Patch0015:     0015-file-Hard-error-if-sync_file_range-fails.patch
+Patch0016:     0016-file-Reduce-the-size-of-the-lock-around-write-evicti.patch
+Patch0017:     0017-file-Document-implicit-assumption-about-eviction-win.patch
+Patch0018:     0018-server-Turn-flush-into-a-controlpath-message.patch
+Patch0019:     0019-file-Fix-minor-typo-in-debug-message.patch
+Patch0020:     0020-file-Add-more-debugging-when-D-file.zero-1-is-used.patch
+Patch0021:     0021-file-Fix-comment-style-in-a-few-places.patch
+Patch0022:     0022-file-Fix-do_fallocate-debugging-on-Alpine.patch
+Patch0023:     0023-file-Rename-h-can_zeroout-to-h-can_blkzeroout-to-ref.patch
+Patch0024:     0024-file-zero-Document-implicit-order-that-we-will-try-z.patch
+Patch0025:     0025-file-zero-Use-BLKDISCARD-method-if-may_trim-is-set.patch
+Patch0026:     0026-vddk-Debug-length-of-extents-when-using-D-vddk.exten.patch
+Patch0027:     0027-cacheextents-Mark-this-filter-as-deprecated.patch
+Patch0028:     0028-include-Move-some-extent-functions-to-nbdkit-common..patch
+Patch0029:     0029-vddk-Display-command-type-in-command-completed-messa.patch
+Patch0030:     0030-vddk-Cache-the-readonly-flag-from-the-.open-call-in-.patch
+Patch0031:     0031-vddk-Move-minimum-version-of-VDDK-to-6.7.patch
+Patch0032:     0032-vddk-Unconditionally-test-QueryAllocatedBlocks.patch
+Patch0033:     0033-vddk-Pre-cache-the-extents-for-readonly-connections.patch
+Patch0034:     0034-file-Save-the-filename-or-equivalent-in-the-file-han.patch
+Patch0035:     0035-file-Add-the-filename-or-equivalent-to-error-message.patch
+Patch0036:     0036-file-Add-offset-count-to-error-messages.patch
+Patch0037:     0037-vddk-stats-Use-us-instead-of-Unicode-s-for-microseco.patch
+Patch0038:     0038-vddk-stats-Line-up-the-columns-correctly.patch
+Patch0039:     0039-vddk-stats-Record-the-byte-count-of-each-QueryAlloca.patch
+Patch0040:     0040-vddk-stats-Collect-elapsed-time-for-ReadAsync-and-Wr.patch
+Patch0041:     0041-server-Fix-off-by-one-for-maximum-block_status-lengt.patch
+Patch0042:     0042-blocksize-Fix-32-bit-overflow-in-.extents-CVE-2025-4.patch
+Patch0043:     0043-vddk-Add-support-for-VDDK-9.0.0.0.patch
+Patch0044:     0044-server-Fix-.zero-fallback-path.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -1518,17 +1543,38 @@ fi
 
 
 %changelog
-* Mon Jul 14 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-5
-- Support VDDK 9
-  resolves: RHEL-103420
-
-* Sat Jul 05 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-4
+* Sat Jul 05 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-12
 - server: Fix .zero fallback path
-  resolves: RHEL-101702
+  resolves: RHEL-101635
 
-* Tue May 13 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-3
-- file: zero: Use BLKDISCARD method if may_trim is set
-  resolves: RHEL-91094
+* Mon Jun 23 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-11
+- Add support for VDDK 9.0.0.0
+  resolves: RHEL-99466
+
+* Mon Jun 09 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-10
+- CVE-2025-47711 denial of service attack by client sending maximum size block
+  status
+- CVE-2025-47712 denial of service attack by client sending large unaligned
+  size block status
+  resolves: RHEL-95814
+
+* Sun Jun 08 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-9
+- vddk: Improve statistics
+  related: RHEL-94823
+
+* Thu Jun 05 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-8
+- Log filename, offset and count in nbdkit-file-plugin error messages
+  resolves: RHEL-95363
+
+* Mon Jun 02 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-7
+- vddk: Pre-cache the extents for readonly connections
+  resolves: RHEL-94823
+
+* Thu May 01 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-6
+- Add extra system call checking and debugging to nbdkit-file-plugin
+  resolves: RHEL-85510
+- Allow nbdkit-file-plugin to zero and trim block devices
+  resolves: RHEL-89353
 
 * Mon Jan 06 2025 Richard W.M. Jones <rjones@redhat.com> - 1.38.5-2
 - vddk: Avoid reading partial chunk beyond the end of the disk

@@ -1,4 +1,4 @@
-From 37c234f30706958a63d45aeea0ffa8ffa8ba10d9 Mon Sep 17 00:00:00 2001
+From e947a2a55cb018711b7f4ede5b5cec291ed5cf24 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Wed, 2 Jul 2025 16:18:19 +0100
 Subject: [PATCH] server: Fix .zero fallback path
@@ -18,7 +18,6 @@ Fixes: commit 19184d3eb6356ae3b14da0fbaa9c9bdc7743a448
 Thanks: Alex Kalenyuk
 (cherry picked from commit 20b23fc9838faeddfd42664a7f497a9b29dc5921)
 (cherry picked from commit 3c8d0812e7a7b6a1f9e5cceab7bee6e25b9cd7cd)
-(cherry picked from commit e947a2a55cb018711b7f4ede5b5cec291ed5cf24)
 ---
  server/plugins.c | 1 +
  1 file changed, 1 insertion(+)

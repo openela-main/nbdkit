@@ -1,0 +1,26 @@
+From c39e0da834bf7fdd23a9be0d391c2666596988be Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 8 Jun 2025 11:04:41 +0100
+Subject: [PATCH] vddk: stats: Line up the columns correctly
+
+(cherry picked from commit 7da09b07148cc12c3214b18bc96c65ed45625dde)
+---
+ plugins/vddk/stats.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/plugins/vddk/stats.c b/plugins/vddk/stats.c
+index 59cfee5a..b551fc5a 100644
+--- a/plugins/vddk/stats.c
++++ b/plugins/vddk/stats.c
+@@ -97,7 +97,7 @@ display_stats (void)
+   qsort (stats.ptr, stats.len, sizeof stats.ptr[0], stat_compare);
+ 
+   nbdkit_debug ("VDDK function stats (-D vddk.stats=1):");
+-  nbdkit_debug ("%-24s  %15s %5s %15s",
++  nbdkit_debug ("%-24s %15s %5s %15s",
+                 "VixDiskLib_...", "us", "calls", "bytes");
+   for (i = 0; i < stats.len; ++i) {
+     if (stats.ptr[i].usecs) {
+-- 
+2.47.1
+

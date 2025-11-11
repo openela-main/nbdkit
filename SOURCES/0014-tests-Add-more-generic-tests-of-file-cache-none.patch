@@ -1,0 +1,238 @@
+From bdab63138758e287b292140e17f2d0e3b4c40bbe Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 1 Apr 2025 12:45:43 +0100
+Subject: [PATCH] tests: Add more generic tests of file cache=none
+
+The tests added in commit 6017ba21ae require cachestats which means
+they are almost always skipped in reality.  Also we're interested in
+whether the windowed eviction could ever corrupt data.  Write a
+simpler pair of tests for data integrity.
+
+Updates: commit 6017ba21aeeb3d7ad85925e78dba85a005194dee
+(cherry picked from commit 7b45f73c0668e56a9188249eeefc2f67aeb50af3)
+---
+ tests/Makefile.am                             | 12 +++--
+ tests/test-file-cache-none-read-consistent.sh | 53 ++++++++++++++++++
+ ...=> test-file-cache-none-read-effective.sh} |  9 ++--
+ .../test-file-cache-none-write-consistent.sh  | 54 +++++++++++++++++++
+ ...> test-file-cache-none-write-effective.sh} | 11 ++--
+ 5 files changed, 126 insertions(+), 13 deletions(-)
+ create mode 100755 tests/test-file-cache-none-read-consistent.sh
+ rename tests/{test-file-cache-none-read.sh => test-file-cache-none-read-effective.sh} (93%)
+ create mode 100755 tests/test-file-cache-none-write-consistent.sh
+ rename tests/{test-file-cache-none-write.sh => test-file-cache-none-write-effective.sh} (92%)
+
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index 4340cc38..eed96d28 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -846,8 +846,10 @@ TESTS += \
+ 	test-file-extents.sh \
+ 	test-file-dir.sh \
+ 	test-file-dirfd.sh \
+-	test-file-cache-none-read.sh \
+-	test-file-cache-none-write.sh \
++	test-file-cache-none-read-consistent.sh \
++	test-file-cache-none-read-effective.sh \
++	test-file-cache-none-write-consistent.sh \
++	test-file-cache-none-write-effective.sh \
+ 	$(NULL)
+ EXTRA_DIST += \
+ 	test-file.sh \
+@@ -857,8 +859,10 @@ EXTRA_DIST += \
+ 	test-file-extents.sh \
+ 	test-file-dir.sh \
+ 	test-file-dirfd.sh \
+-	test-file-cache-none-read.sh \
+-	test-file-cache-none-write.sh \
++	test-file-cache-none-read-consistent.sh \
++	test-file-cache-none-read-effective.sh \
++	test-file-cache-none-write-consistent.sh \
++	test-file-cache-none-write-effective.sh \
+ 	$(NULL)
+ LIBGUESTFS_TESTS += test-file-block
+ 
+diff --git a/tests/test-file-cache-none-read-consistent.sh b/tests/test-file-cache-none-read-consistent.sh
+new file mode 100755
+index 00000000..5f5794ee
+--- /dev/null
++++ b/tests/test-file-cache-none-read-consistent.sh
+@@ -0,0 +1,53 @@
++#!/usr/bin/env bash
++# nbdkit
++# Copyright Red Hat
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met:
++#
++# * Redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer.
++#
++# * Redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution.
++#
++# * Neither the name of Red Hat nor the names of its contributors may be
++# used to endorse or promote products derived from this software without
++# specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++# SUCH DAMAGE.
++
++# Test the file plugin, reading with cache=none.
++#
++# Unlike test-file-cache-none-read-effective.sh, this test doesn't
++# require cachestats.  It's more about testing integrity of reading.
++
++source ./functions.sh
++set -e
++set -x
++
++requires_plugin file
++requires_run
++requires_nbdcopy
++requires test -f disk
++requires md5sum --version
++
++out=file-cache-none-read-consistent.out
++cleanup_fn rm -f $out
++
++export out
++nbdkit file disk cache=none --run 'nbdcopy "$uri" "$out"'
++test "$(md5sum < disk)" = "$(md5sum < $out)"
+diff --git a/tests/test-file-cache-none-read.sh b/tests/test-file-cache-none-read-effective.sh
+similarity index 93%
+rename from tests/test-file-cache-none-read.sh
+rename to tests/test-file-cache-none-read-effective.sh
+index c9831b43..efead224 100755
+--- a/tests/test-file-cache-none-read.sh
++++ b/tests/test-file-cache-none-read-effective.sh
+@@ -30,7 +30,8 @@
+ # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ # SUCH DAMAGE.
+ 
+-# Test the file plugin, reading with cache=none.
++# Test the file plugin, reading with cache=none, is effective at
++# reducing page cache usage.
+ 
+ source ./functions.sh
+ set -e
+@@ -52,9 +53,9 @@ requires $SED --version
+ requires type cachestats
+ requires type cachedel
+ 
+-inp=file-cache-none-read.in
+-stats1=file-cache-none-read.s1
+-stats2=file-cache-none-read.s2
++inp=file-cache-none-read-effective.in
++stats1=file-cache-none-read-effective.s1
++stats2=file-cache-none-read-effective.s2
+ rm -f $inp $stats1 $stats2
+ cleanup_fn rm -f $inp $stats1 $stats2
+ 
+diff --git a/tests/test-file-cache-none-write-consistent.sh b/tests/test-file-cache-none-write-consistent.sh
+new file mode 100755
+index 00000000..749805f1
+--- /dev/null
++++ b/tests/test-file-cache-none-write-consistent.sh
+@@ -0,0 +1,54 @@
++#!/usr/bin/env bash
++# nbdkit
++# Copyright Red Hat
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met:
++#
++# * Redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer.
++#
++# * Redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution.
++#
++# * Neither the name of Red Hat nor the names of its contributors may be
++# used to endorse or promote products derived from this software without
++# specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++# SUCH DAMAGE.
++
++# Test the file plugin, writing with cache=none.
++#
++# Unlike test-file-cache-none-write-effective.sh, this test doesn't
++# require cachestats.  It's more about testing integrity of writing.
++
++source ./functions.sh
++set -e
++set -x
++
++requires_plugin file
++requires_run
++requires_nbdcopy
++requires test -f disk
++requires md5sum --version
++requires $TRUNCATE --version
++
++out=file-cache-none-write-consistent.out
++cleanup_fn rm -f $out
++
++rm -f $out; $TRUNCATE -r disk $out
++nbdkit file $out cache=none --run 'nbdcopy disk "$uri"'
++test "$(md5sum < disk)" = "$(md5sum < $out)"
+diff --git a/tests/test-file-cache-none-write.sh b/tests/test-file-cache-none-write-effective.sh
+similarity index 92%
+rename from tests/test-file-cache-none-write.sh
+rename to tests/test-file-cache-none-write-effective.sh
+index 2041a5cd..e0159242 100755
+--- a/tests/test-file-cache-none-write.sh
++++ b/tests/test-file-cache-none-write-effective.sh
+@@ -30,7 +30,8 @@
+ # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ # SUCH DAMAGE.
+ 
+-# Test the file plugin, writing with cache=none.
++# Test the file plugin, writing with cache=none, is effective at
++# reducing page cache usage.
+ 
+ source ./functions.sh
+ set -e
+@@ -51,10 +52,10 @@ requires $SED --version
+ # It doesn't support --version or --help, so use 'type' instead.
+ requires type cachestats
+ 
+-inp=file-cache-none-write.in
+-out=file-cache-none-write.out
+-stats1=file-cache-none-write.s1
+-stats2=file-cache-none-write.s2
++inp=file-cache-none-write-effective.in
++out=file-cache-none-write-effective.out
++stats1=file-cache-none-write-effective.s1
++stats2=file-cache-none-write-effective.s2
+ rm -f $inp $out $stats1 $stats2
+ cleanup_fn rm -f $inp $out $stats1 $stats2
+ 
+-- 
+2.47.1
+

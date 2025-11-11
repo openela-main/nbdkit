@@ -1,0 +1,41 @@
+From 881113e29b45975742ca11a4d0539ed2eb40b717 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 28 Mar 2025 20:32:46 +0000
+Subject: [PATCH] file: Add debugging if sync_file_range / posix_fadvise fails
+
+These are advisory hints, but add some debugging so we know if these
+calls are failing.  The errors are ignored so there is no behaviour
+change.
+
+Thanks: Eric Sandeen
+(cherry picked from commit feb22cfc85b0750a4e4bfbc5fe56636883599feb)
+---
+ plugins/file/file.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/plugins/file/file.c b/plugins/file/file.c
+index 2bad6480..6d0e77a1 100644
+--- a/plugins/file/file.c
++++ b/plugins/file/file.c
+@@ -123,11 +123,13 @@ evict_writes (int fd, uint64_t offset, size_t len)
+ 
+   /* Evict the oldest window from the page cache. */
+   if (window[0].len > 0) {
+-    sync_file_range (window[0].fd, window[0].offset, window[0].len,
+-                     SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|
+-                     SYNC_FILE_RANGE_WAIT_AFTER);
+-    posix_fadvise (window[0].fd, window[0].offset, window[0].len,
+-                   POSIX_FADV_DONTNEED);
++    if (sync_file_range (window[0].fd, window[0].offset, window[0].len,
++                         SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|
++                         SYNC_FILE_RANGE_WAIT_AFTER) == -1)
++      nbdkit_debug ("sync_file_range: wait: (ignored): %m");
++    if (posix_fadvise (window[0].fd, window[0].offset, window[0].len,
++                       POSIX_FADV_DONTNEED) == -1)
++      nbdkit_debug ("posix_fadvise: POSIX_FADV_DONTNEED: (ignored): %m");
+   }
+ 
+   /* Move the Nth window to N-1. */
+-- 
+2.47.1
+

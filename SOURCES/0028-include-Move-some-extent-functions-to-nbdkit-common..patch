@@ -1,0 +1,77 @@
+From ea41c6517d0093e60b3acbc7a310758ba75211fc Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sat, 31 May 2025 08:04:41 +0100
+Subject: [PATCH] include: Move some extent functions to nbdkit-common.h
+
+No existing plugins use the extent functions nbdkit_extents_new,
+nbdkit_extents_free, etc, since they are mainly useful for filters so
+they can build and manipulate new lists of extents.  Nevertheless
+there is nothing that prevents them from being used in plugins, so
+move those functions to the common header (so they appear for users of
+<nbdkit-plugin.h>)
+
+There are a couple of helper functions which are really
+filter-specific so leave those in nbdkit-filter.h.
+
+(cherry picked from commit 03792d04f270f2cffc589dd9703c9de9c3d5a65e)
+---
+ include/nbdkit-common.h | 15 +++++++++++++++
+ include/nbdkit-filter.h | 15 +--------------
+ 2 files changed, 16 insertions(+), 14 deletions(-)
+
+diff --git a/include/nbdkit-common.h b/include/nbdkit-common.h
+index d0a5c854..9d7409e6 100644
+--- a/include/nbdkit-common.h
++++ b/include/nbdkit-common.h
+@@ -152,7 +152,22 @@ NBDKIT_EXTERN_DECL (const char *, nbdkit_vprintf_intern,
+                     (const char *msg, va_list args)
+                     ATTRIBUTE_FORMAT_PRINTF (1, 0));
+ 
++/* Extent functions. */
++struct nbdkit_extent {
++  uint64_t offset;
++  uint64_t length;
++  uint32_t type;
++};
++
+ struct nbdkit_extents;
++
++NBDKIT_EXTERN_DECL (struct nbdkit_extents *, nbdkit_extents_new,
++                    (uint64_t start, uint64_t end));
++NBDKIT_EXTERN_DECL (void, nbdkit_extents_free, (struct nbdkit_extents *));
++NBDKIT_EXTERN_DECL (size_t, nbdkit_extents_count,
++                    (const struct nbdkit_extents *));
++NBDKIT_EXTERN_DECL (struct nbdkit_extent, nbdkit_get_extent,
++                    (const struct nbdkit_extents *, size_t));
+ NBDKIT_EXTERN_DECL (int, nbdkit_add_extent,
+                     (struct nbdkit_extents *,
+                      uint64_t offset, uint64_t length, uint32_t type));
+diff --git a/include/nbdkit-filter.h b/include/nbdkit-filter.h
+index a4ac09d4..31520bf5 100644
+--- a/include/nbdkit-filter.h
++++ b/include/nbdkit-filter.h
+@@ -121,20 +121,7 @@ struct nbdkit_next_ops {
+    */
+ };
+ 
+-/* Extent functions. */
+-struct nbdkit_extent {
+-  uint64_t offset;
+-  uint64_t length;
+-  uint32_t type;
+-};
+-
+-NBDKIT_EXTERN_DECL (struct nbdkit_extents *, nbdkit_extents_new,
+-                    (uint64_t start, uint64_t end));
+-NBDKIT_EXTERN_DECL (void, nbdkit_extents_free, (struct nbdkit_extents *));
+-NBDKIT_EXTERN_DECL (size_t, nbdkit_extents_count,
+-                    (const struct nbdkit_extents *));
+-NBDKIT_EXTERN_DECL (struct nbdkit_extent, nbdkit_get_extent,
+-                    (const struct nbdkit_extents *, size_t));
++/* Extent helpers. */
+ NBDKIT_EXTERN_DECL (struct nbdkit_extents *, nbdkit_extents_full,
+                     (nbdkit_next *next,
+                      uint32_t count, uint64_t offset,
+-- 
+2.47.1
+

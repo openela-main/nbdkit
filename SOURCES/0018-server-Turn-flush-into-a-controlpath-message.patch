@@ -1,0 +1,33 @@
+From 23a2ec7a574dda51a5b4bd2ddef3dcc2b2c8b8f2 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sat, 5 Apr 2025 09:02:03 +0100
+Subject: [PATCH] server: Turn flush into a controlpath message
+
+The server debug flags -D nbdkit.backend.controlpath=<bool> and
+-D nbdkit.backend.datapath=<bool> control the verbosity of messages.
+
+'flush' was categorized as a datapath message, but it's more arguably
+a controlpath message, and anyway it is rare and useful to see in
+virt-v2v output even when datapath messages are suppressed.
+
+(cherry picked from commit 079c8a91bf5161614916470dcb1f52bee8bfb397)
+---
+ server/backend.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/server/backend.c b/server/backend.c
+index 6232b69d..1f1bcfce 100644
+--- a/server/backend.c
++++ b/server/backend.c
+@@ -693,7 +693,7 @@ backend_flush (struct context *c,
+   assert (c->handle && (c->state & HANDLE_CONNECTED));
+   assert (c->can_flush == 1);
+   assert (flags == 0);
+-  datapath_debug ("%s: flush", b->name);
++  controlpath_debug ("%s: flush", b->name);
+ 
+   r = b->flush (c, flags, err);
+   if (r == -1)
+-- 
+2.47.1
+

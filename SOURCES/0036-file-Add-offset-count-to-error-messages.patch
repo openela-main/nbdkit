@@ -1,0 +1,132 @@
+From 45f740e3b4a707e5d2db739b16fb33f4d7b466cf Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 4 Jun 2025 21:15:26 +0100
+Subject: [PATCH] file: Add offset/count to error messages
+
+Although the same information is available in debug logs, if verbose
+messages (-v) are not used then the information is lost.  As it might
+be useful occasionally, ensure it is captured in errors.
+
+(cherry picked from commit 253574354252f4a77e2df0769b721e76f1777651)
+---
+ plugins/file/file.c | 35 ++++++++++++++++++++++++-----------
+ 1 file changed, 24 insertions(+), 11 deletions(-)
+
+diff --git a/plugins/file/file.c b/plugins/file/file.c
+index 9ba61187..ade6f5ff 100644
+--- a/plugins/file/file.c
++++ b/plugins/file/file.c
+@@ -839,7 +839,8 @@ file_pread (void *handle, void *buf, uint32_t count, uint64_t offset,
+   while (count > 0) {
+     ssize_t r = pread (h->fd, buf, count, offset);
+     if (r == -1) {
+-      nbdkit_error ("pread: %s: %m", h->name);
++      nbdkit_error ("pread: %s: offset=%" PRIu64 ", count=%" PRIu32 ": %m",
++                    h->name, offset, count);
+       return -1;
+     }
+     if (r == 0) {
+@@ -875,7 +876,8 @@ file_pwrite (void *handle, const void *buf, uint32_t count, uint64_t offset,
+   while (count > 0) {
+     ssize_t r = pwrite (h->fd, buf, count, offset);
+     if (r == -1) {
+-      nbdkit_error ("pwrite: %s: %m", h->name);
++      nbdkit_error ("pwrite: %s: offset=%" PRIu64 ", count=%" PRIu32 ": %m",
++                    h->name, offset, count);
+       return -1;
+     }
+     buf += r;
+@@ -957,7 +959,8 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+     }
+ 
+     if (!is_enotsup (errno)) {
+-      nbdkit_error ("zero: %s: %m", h->name);
++      nbdkit_error ("zero: %s: offset=%" PRIu64 ", count=%" PRIu32 ": %m",
++                    h->name, offset, count);
+       return -1;
+     }
+ 
+@@ -993,7 +996,8 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+       }
+ 
+       if (!is_enotsup (errno)) {
+-        nbdkit_error ("zero: %s: %m", h->name);
++        nbdkit_error ("zero: %s: offset=%" PRIu64 ", count=%" PRIu32 ": %m",
++                      h->name, offset, count);
+         return -1;
+       }
+ 
+@@ -1001,7 +1005,8 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+     }
+     else {
+       if (!is_enotsup (errno)) {
+-        nbdkit_error ("zero: %s: %m", h->name);
++        nbdkit_error ("zero: %s: offset=%" PRIu64 ", count=%" PRIu32 ": %m",
++                      h->name, offset, count);
+         return -1;
+       }
+ 
+@@ -1023,7 +1028,8 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+     }
+ 
+     if (!is_enotsup (errno)) {
+-      nbdkit_error ("zero: %s: %m", h->name);
++      nbdkit_error ("zero: %s: offset=%" PRIu64 ", count=%" PRIu32 ": %m",
++                    h->name, offset, count);
+       return -1;
+     }
+ 
+@@ -1051,14 +1057,16 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+       }
+ 
+       if (!is_enotsup (errno)) {
+-        nbdkit_error ("zero: %s: %m", h->name);
++        nbdkit_error ("zero: %s: offset=%" PRIu64 ", count=%" PRIu32 ": %m",
++                      h->name, offset, count);
+         return -1;
+       }
+ 
+       h->can_fallocate = false;
+     } else {
+       if (!is_enotsup (errno)) {
+-        nbdkit_error ("zero: %s: %m", h->name);
++        nbdkit_error ("zero: %s:  offset=%" PRIu64 ", count=%" PRIu32 ":%m",
++                      h->name, offset, count);
+         return -1;
+       }
+ 
+@@ -1082,7 +1090,8 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+     }
+ 
+     if (errno != ENOTTY) {
+-      nbdkit_error ("zero: %s: %m", h->name);
++      nbdkit_error ("zero: %s: offset=%" PRIu64 ", count=%" PRIu32 ": %m",
++                    h->name, offset, count);
+       return -1;
+     }
+ 
+@@ -1120,7 +1129,9 @@ file_trim (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+       /* Trim is advisory; we don't care if it fails for anything other
+        * than EIO or EPERM. */
+       if (errno == EPERM || errno == EIO) {
+-        nbdkit_error ("fallocate: %s: %m", h->name);
++        nbdkit_error ("fallocate: %s: offset=%" PRIu64 ", count=%" PRIu32 ":"
++                      " %m",
++                      h->name, offset, count);
+         return -1;
+       }
+ 
+@@ -1241,7 +1252,9 @@ file_cache (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+   r = posix_fadvise (h->fd, offset, count, POSIX_FADV_WILLNEED);
+   if (r) {
+     errno = r;
+-    nbdkit_error ("posix_fadvise: %s: %m", h->name);
++    nbdkit_error ("posix_fadvise: %s: offset=%" PRIu64 ", count=%" PRIu32 ":"
++                  " %m",
++                  h->name, offset, count);
+     return -1;
+   }
+   return 0;
+-- 
+2.47.1
+

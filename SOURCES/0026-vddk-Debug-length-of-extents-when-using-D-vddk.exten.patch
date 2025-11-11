@@ -1,0 +1,30 @@
+From 2b4f411ebf4fca9c084e8fc74ed2c53debfb3614 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 29 May 2025 09:15:33 +0000
+Subject: [PATCH] vddk: Debug length of extents when using -D vddk.extents=1
+
+(cherry picked from commit a53746d326e08fae9ec1ea782df740abb48d0114)
+---
+ plugins/vddk/worker.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/plugins/vddk/worker.c b/plugins/vddk/worker.c
+index 8a91250a..c61c4d16 100644
+--- a/plugins/vddk/worker.c
++++ b/plugins/vddk/worker.c
+@@ -375,9 +375,10 @@ add_extent (struct nbdkit_extents *extents,
+     return 0;
+ 
+   if (vddk_debug_extents)
+-    nbdkit_debug ("adding extent type %s at [%" PRIu64 "...%" PRIu64 "]",
++    nbdkit_debug ("adding extent type %s at [%" PRIu64 "...%" PRIu64 "] "
++                  "(length %" PRIu64 ")",
+                   is_hole ? "hole" : "allocated data",
+-                  *position, next_position-1);
++                  *position, next_position-1, length);
+   if (nbdkit_add_extent (extents, *position, length, type) == -1)
+     return -1;
+ 
+-- 
+2.47.1
+

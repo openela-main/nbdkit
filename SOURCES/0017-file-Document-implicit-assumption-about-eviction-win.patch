@@ -1,0 +1,29 @@
+From 5f5f74fa0afae78365eb431a589a6fa4938b9287 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 1 Apr 2025 16:51:24 +0100
+Subject: [PATCH] file: Document implicit assumption about eviction windows
+
+Add a comment that slots in the window list are only valid when len > 0.
+This was true before but only implicit.
+
+(cherry picked from commit 2022ac667f3c1de81b692f0128dd83a7c4999e38)
+---
+ plugins/file/file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/plugins/file/file.c b/plugins/file/file.c
+index e68c24ee..6bcc5537 100644
+--- a/plugins/file/file.c
++++ b/plugins/file/file.c
+@@ -110,7 +110,7 @@ static enum { cache_default, cache_none } cache_mode = cache_default;
+ struct write_window {
+   int fd;
+   uint64_t offset;
+-  size_t len;
++  size_t len;           /* window slot only valid if len > 0 */
+ };
+ 
+ static pthread_mutex_t window_lock = PTHREAD_MUTEX_INITIALIZER;
+-- 
+2.47.1
+

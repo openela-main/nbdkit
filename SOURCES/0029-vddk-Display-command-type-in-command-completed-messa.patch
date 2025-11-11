@@ -1,0 +1,29 @@
+From dde9c60307ca0cefcc8109dc1ef71dee8144d931 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 30 May 2025 13:29:28 +0100
+Subject: [PATCH] vddk: Display command type in command completed message
+
+Useful extra debugging.
+
+(cherry picked from commit 81d4d74fecf3c071e144a8ba016f43ba1de1b093)
+---
+ plugins/vddk/worker.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/vddk/worker.c b/plugins/vddk/worker.c
+index c61c4d16..3bf1d5c2 100644
+--- a/plugins/vddk/worker.c
++++ b/plugins/vddk/worker.c
+@@ -116,7 +116,8 @@ complete_command (void *vp, VixError result)
+   struct command *cmd = vp;
+ 
+   if (vddk_debug_datapath)
+-    nbdkit_debug ("command %" PRIu64 " completed", cmd->id);
++    nbdkit_debug ("command %" PRIu64 " (%s) completed",
++                  cmd->id, command_type_string (cmd->type));
+ 
+   ACQUIRE_LOCK_FOR_CURRENT_SCOPE (&cmd->mutex);
+ 
+-- 
+2.47.1
+

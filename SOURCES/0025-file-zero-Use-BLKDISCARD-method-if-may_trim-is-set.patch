@@ -1,4 +1,4 @@
-From 26598004453d1d35c70229ade48a085a74b3dada Mon Sep 17 00:00:00 2001
+From 396e8a97835155a620cabbcf1aabaaa1fa4a08f1 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Thu, 1 May 2025 10:36:23 +0100
 Subject: [PATCH] file: zero: Use BLKDISCARD method if may_trim is set
@@ -14,17 +14,16 @@ Fixes: https://issues.redhat.com/browse/RHEL-89353
 Reported-by: Germano Veit Michel
 Thanks: Eric Blake
 (cherry picked from commit 7a9ecda24906c64d9f8c7238a96cb3f686e894eb)
-(cherry picked from commit 396e8a97835155a620cabbcf1aabaaa1fa4a08f1)
 ---
  plugins/file/file.c                 | 50 +++++++++++++++++++++++++++++
  plugins/file/nbdkit-file-plugin.pod |  5 +++
  2 files changed, 55 insertions(+)
 
 diff --git a/plugins/file/file.c b/plugins/file/file.c
-index e5fd864f..41b23457 100644
+index 3b82e02d..b4dec3c5 100644
 --- a/plugins/file/file.c
 +++ b/plugins/file/file.c
-@@ -376,6 +376,9 @@ file_dump_plugin (void)
+@@ -397,6 +397,9 @@ file_dump_plugin (void)
  #ifdef BLKSSZGET
    printf ("file_blksszget=yes\n");
  #endif
@@ -34,7 +33,7 @@ index e5fd864f..41b23457 100644
  #ifdef BLKZEROOUT
    printf ("file_blkzeroout=yes\n");
  #endif
-@@ -476,6 +479,7 @@ struct handle {
+@@ -497,6 +500,7 @@ struct handle {
    bool can_punch_hole;
    bool can_zero_range;
    bool can_fallocate;
@@ -42,7 +41,7 @@ index e5fd864f..41b23457 100644
    bool can_blkzeroout;
  };
  
-@@ -683,6 +687,7 @@ file_open (int readonly)
+@@ -704,6 +708,7 @@ file_open (int readonly)
  
    h->can_fallocate = true;
    h->can_blkzeroout = h->is_block_device;
@@ -50,7 +49,7 @@ index e5fd864f..41b23457 100644
  
    return h;
  }
-@@ -921,6 +926,51 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
+@@ -944,6 +949,51 @@ file_zero (void *handle, uint32_t count, uint64_t offset, uint32_t flags)
    }
  #endif
  

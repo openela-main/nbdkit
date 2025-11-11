@@ -1,4 +1,4 @@
-From 5dfd68ac3fde66113c0044c07679138dd72325b4 Mon Sep 17 00:00:00 2001
+From 4c02ff62f40497335da185cc4b45c2ba43fb609b Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Thu, 1 May 2025 10:59:17 +0100
 Subject: [PATCH] file: Fix do_fallocate debugging on Alpine
@@ -16,16 +16,15 @@ debugging I added in commit ecf6b15fa8 failed to compile with:
 
 Fixes: commit ecf6b15fa84a02b74ea969f06552c82ee418b9b4
 (cherry picked from commit 419a347054f81c53706637feddbc5008beab77d3)
-(cherry picked from commit 4c02ff62f40497335da185cc4b45c2ba43fb609b)
 ---
  plugins/file/file.c | 15 +++++++++++++--
  1 file changed, 13 insertions(+), 2 deletions(-)
 
 diff --git a/plugins/file/file.c b/plugins/file/file.c
-index 8b63184f..d94d5b78 100644
+index 01ad1ef2..32c5e2b7 100644
 --- a/plugins/file/file.c
 +++ b/plugins/file/file.c
-@@ -852,7 +852,7 @@ file_pwrite (void *handle, const void *buf, uint32_t count, uint64_t offset,
+@@ -875,7 +875,7 @@ file_pwrite (void *handle, const void *buf, uint32_t count, uint64_t offset,
    return 0;
  }
  
@@ -34,7 +33,7 @@ index 8b63184f..d94d5b78 100644
  static int
  do_fallocate (int fd, int mode_, off_t offset, off_t len)
  {
-@@ -861,9 +861,20 @@ do_fallocate (int fd, int mode_, off_t offset, off_t len)
+@@ -884,9 +884,20 @@ do_fallocate (int fd, int mode_, off_t offset, off_t len)
    r = fallocate (fd, mode_, offset, len);
  
    if (file_debug_zero)

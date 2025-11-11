@@ -1,0 +1,78 @@
+From 8d5ab5acd2d111f6cf02dbce4ad034b49b86bc35 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 30 May 2025 13:59:28 +0100
+Subject: [PATCH] vddk: Unconditionally test QueryAllocatedBlocks
+
+Except in rare cases like a suddenly dropped connection, we always
+call vddk_can_extents and therefore do this test.  We might as well do
+it unconditionally when the worker thread starts up.
+
+This simplifies following commits where we may do more work based on
+this flag when the worker thread starts up.
+
+(cherry picked from commit 787db3e8ecfd81b683f541065daee75665ab47e0)
+---
+ plugins/vddk/worker.c | 23 +++++++++++++++--------
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/plugins/vddk/worker.c b/plugins/vddk/worker.c
+index 076b2bd7..6efcc6f6 100644
+--- a/plugins/vddk/worker.c
++++ b/plugins/vddk/worker.c
+@@ -303,8 +303,13 @@ do_flush (struct command *cmd, struct vddk_handle *h)
+   return 0;
+ }
+ 
+-static int
+-do_can_extents (struct command *cmd, struct vddk_handle *h)
++/* Try the QueryAllocatedBlocks call and if it's non-functional return
++ * false.  At some point in future, perhaps when we move to baseline
++ * VDDK >= 7, we can just assume it works and remove this test
++ * entirely.
++ */
++static bool
++test_can_extents (struct vddk_handle *h)
+ {
+   VixError err;
+   VixDiskLibBlockList *block_list;
+@@ -314,9 +319,6 @@ do_can_extents (struct command *cmd, struct vddk_handle *h)
+    */
+   error_suppression = 1;
+ 
+-  /* Try the QueryAllocatedBlocks call and if it's non-functional
+-   * return false.
+-   */
+   VDDK_CALL_START (VixDiskLib_QueryAllocatedBlocks,
+                    "handle, 0, %d sectors, %d sectors",
+                    VIXDISKLIB_MIN_CHUNK_SIZE, VIXDISKLIB_MIN_CHUNK_SIZE)
+@@ -502,6 +504,10 @@ vddk_worker_thread (void *handle)
+ {
+   struct vddk_handle *h = handle;
+   bool stop = false;
++  bool can_extents;
++
++  /* Test if QueryAllocatedBlocks will work. */
++  can_extents = test_can_extents (h);
+ 
+   while (!stop) {
+     struct command *cmd;
+@@ -544,12 +550,13 @@ vddk_worker_thread (void *handle)
+       break;
+ 
+     case CAN_EXTENTS:
+-      r = do_can_extents (cmd, h);
+-      if (r >= 0)
+-        *(int *)cmd->ptr = r;
++      *(int *)cmd->ptr = can_extents;
++      r = 0;
+       break;
+ 
+     case EXTENTS:
++      /* If we returned false above, we should never be called here. */
++      assert (can_extents);
+       r = do_extents (cmd, h);
+       break;
+ 
+-- 
+2.47.1
+

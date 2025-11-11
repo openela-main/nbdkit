@@ -1,0 +1,349 @@
+From 9bcda0ca197a20db8675253957fee954f362e689 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 30 May 2025 15:06:07 +0100
+Subject: [PATCH] vddk: Pre-cache the extents for readonly connections
+
+As explained in detail in the code comment, QueryAllocatedBlocks has
+very poor performance.  We can partially work around this by
+pre-caching extents when the first NBD_BLOCK_STATUS request is made.
+We only do this for readonly connections, since it would be very
+complex to do it for writable connections where the extent information
+could change under us.  And we only do it on the first
+NBD_BLOCK_STATUS request, so we know that the caller is interested in
+extents.
+
+Benchmarking
+------------
+
+This improves performance, dramatically in some cases:
+
+       Size Used%  [ni]   [nm]   [nc]   [qi]   [qm]   [qc]   [dd]
+
+before  64G   16%    17     21    354      6     62    180
+after    "     "     18     13     59      6      7     66     57
+                           nc=178 MBytes/s               dd=1150 MBytes/sec
+
+before 128G  5.5%    17     29    646      6     50    151
+after    "     "     17     14     68      6      8     71
+                           nc=106 MBytes/s
+
+before 128G   45%    17     30   1073      6     52    578
+after    "     "     17     14    457      6      8    506    143
+                           nc=128 MBytes/s               dd=409 MBytes/sec
+
+                    (all times in seconds)
+
+[ni] nbdinfo $uri
+     Note: Makes two connections, unlike qemu-img info.
+
+[nm] nbdinfo --map --totals $uri
+     Note: Slower than it ought to be, needs investigation.
+
+[nc] nbdcopy -p $uri null:
+
+[qi] qemu-img info $uri
+
+[qm] qemu-img map $uri
+
+[qc] qemu-img convert -p -n -f raw $uri \
+                  -O raw 'json:{"file.driver":"null-co","file.size":"1E"}'
+     Note: Requests the map up front, which is why it performs better
+     than nbdcopy on the "before" version since reads are not being
+     serialized by concurrent calls to QueryAllocatedBlocks.
+
+[dd] dd if=*-flat.vmdk of=/dev/null bs=16777216
+     Note: This command was run on the ESXi server where the storage
+     is assumed to be local.  ESXi has very limited tools available
+     (eg. no "fio" etc).  Also the cp command is from Busybox and is
+     notably slower than dd.  To get the accurate copying rate I
+     assumed that this command copies all data on disk to /dev/null,
+     skipping reading holes where thin provisioned.  IOW using the "ls
+     -s" output as the number of blocks read.
+
+It should be noted that the after/[nc] numbers are not very stable.
+In the last test where [nc] = 457, I see a deviation of as much as 10%
+either side over multiple runs.
+
+The network used in the test is 25 Gbps and clearly we are nowhere
+near able to reach that.  A more likely upper limit is the speed of
+reading from the disks ([dd]).  There is also a large gap between our
+performance and that number.  VMware is thought to impose a
+per-connection limit of around 1 Gbps on NFC connections, and there
+are other limitations
+(https://knowledge.broadcom.com/external/article/307001/nfc-performance-is-slow-resulting-in-mig.html).
+
+Tuning NFC makes no observable difference
+-----------------------------------------
+
+Further tuning of NFC is possible
+(https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/vsphere-supervisor/7-0/best-practices-for-nbd-transport.html).
+
+Using compression (nbdkit vddk plugin 'compression' option) is
+possible but in my test it makes things much slower.  This is using
+the first VM from the tests above:
+
+                    [nc]
+
+  (no compression)    59  (178 MBytes/sec)
+  compression=zlib   323  ( 33 MBytes/sec)
+
+VMware documentation also suggests using a configuration file
+containing the entries below (the configuration file is placed
+somewhere on the client, and referenced using the
+config=/path/to/config.ini parameter):
+
+  vixDiskLib.nfcAio.Session.BufSizeIn64KB=32
+  vixDiskLib.nfcAio.Session.BufCount=16
+
+This made no difference for me, at least when testing a single
+conversion.  Separate tests done by the MTV team suggest it may
+improve performance if you are converting multiple disks / VMs in
+parallel
+(https://docs.redhat.com/en/documentation/migration_toolkit_for_virtualization/2.7/html/installing_and_using_the_migration_toolkit_for_virtualization/mtv-performance-recommendation_mtv#mtv-aio-buffer-key-findings_mtv)
+
+Some VMware documentation also suggests:
+
+  config.nfc.useSSL=false
+
+but this also made no difference.
+
+Some VMware documentation suggests using unbuffered I/O
+(unbuffered=true) but in my test this caused a large slow down.
+
+Continue to disable multi-conn
+------------------------------
+
+We have recommended against using multi-conn with the VDDK plugin,
+because we observed some slow down.  This commit makes no difference
+to this advice.  The same amount of slow down is still observed.  (In
+virt-v2v we use --filter=multi-conn multi-conn-mode=disable to ensure
+it is never used.)
+
+(cherry picked from commit 5a882e74cae3dbaa09bf3b942a02f9947b12f6e5)
+---
+ plugins/vddk/vddk.c   |   2 +
+ plugins/vddk/vddk.h   |   3 +
+ plugins/vddk/worker.c | 166 +++++++++++++++++++++++++++++++++++++++++-
+ 3 files changed, 170 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/vddk/vddk.c b/plugins/vddk/vddk.c
+index 9d49203c..bbf0af31 100644
+--- a/plugins/vddk/vddk.c
++++ b/plugins/vddk/vddk.c
+@@ -829,6 +829,8 @@ vddk_close (void *handle)
+   send_command_and_wait (h, &stop_cmd);
+   pthread_join (h->thread, NULL);
+ 
++  nbdkit_extents_free (h->extents);
++
+   VDDK_CALL_START (VixDiskLib_Close, "handle")
+     VixDiskLib_Close (h->handle);
+   VDDK_CALL_END (VixDiskLib_Close, 0);
+diff --git a/plugins/vddk/vddk.h b/plugins/vddk/vddk.h
+index 3586c5da..461fb528 100644
+--- a/plugins/vddk/vddk.h
++++ b/plugins/vddk/vddk.h
+@@ -171,6 +171,9 @@ struct vddk_handle {
+ 
+   /* Cached disk size in bytes (set in get_size()). */
+   uint64_t size;
++
++  /* Cached extents for readonly disks. */
++  struct nbdkit_extents *extents;
+ };
+ 
+ /* reexec.c */
+diff --git a/plugins/vddk/worker.c b/plugins/vddk/worker.c
+index 6efcc6f6..3925fb91 100644
+--- a/plugins/vddk/worker.c
++++ b/plugins/vddk/worker.c
+@@ -37,6 +37,7 @@
+ #include <stdbool.h>
+ #include <stdint.h>
+ #include <inttypes.h>
++#include <time.h>
+ 
+ #include <pthread.h>
+ 
+@@ -380,7 +381,7 @@ add_extent (struct nbdkit_extents *extents,
+ }
+ 
+ static int
+-do_extents (struct command *cmd, struct vddk_handle *h)
++get_extents_slow (struct command *cmd, struct vddk_handle *h)
+ {
+   const uint32_t count = cmd->count;
+   const uint64_t offset = cmd->offset;
+@@ -496,6 +497,169 @@ do_extents (struct command *cmd, struct vddk_handle *h)
+   return 0;
+ }
+ 
++static int
++pre_cache_extents (struct vddk_handle *h)
++{
++  struct nbdkit_extents *extents;
++  uint64_t start_sector = 0;
++  uint64_t nr_chunks_remaining =
++    h->size / VIXDISKLIB_MIN_CHUNK_SIZE / VIXDISKLIB_SECTOR_SIZE;
++  uint64_t position = 0;
++
++  extents = nbdkit_extents_new (0, h->size);
++  if (extents == NULL)
++    return -1;
++
++  /* Scan through the disk reading whole "chunks" (32 GB), the most
++   * efficient way to use QueryAllocatedBlocks.
++   */
++  while (nr_chunks_remaining > 0) {
++    VixError err;
++    uint32_t i;
++    uint64_t nr_chunks, nr_sectors;
++    VixDiskLibBlockList *block_list;
++
++    assert (IS_ALIGNED (start_sector, VIXDISKLIB_MIN_CHUNK_SIZE));
++
++    nr_chunks = MIN (nr_chunks_remaining, VIXDISKLIB_MAX_CHUNK_NUMBER);
++    nr_sectors = nr_chunks * VIXDISKLIB_MIN_CHUNK_SIZE;
++
++    VDDK_CALL_START (VixDiskLib_QueryAllocatedBlocks,
++                     "handle, %" PRIu64 " sectors, %" PRIu64 " sectors, "
++                     "%d sectors",
++                     start_sector, nr_sectors, VIXDISKLIB_MIN_CHUNK_SIZE)
++      err = VixDiskLib_QueryAllocatedBlocks (h->handle,
++                                             start_sector, nr_sectors,
++                                             VIXDISKLIB_MIN_CHUNK_SIZE,
++                                             &block_list);
++    VDDK_CALL_END (VixDiskLib_QueryAllocatedBlocks, 0);
++    if (err != VIX_OK) {
++      VDDK_ERROR (err, "VixDiskLib_QueryAllocatedBlocks");
++      nbdkit_extents_free (extents);
++      return -1;
++    }
++
++    for (i = 0; i < block_list->numBlocks; ++i) {
++      uint64_t blk_offset, blk_length;
++
++      blk_offset = block_list->blocks[i].offset * VIXDISKLIB_SECTOR_SIZE;
++      blk_length = block_list->blocks[i].length * VIXDISKLIB_SECTOR_SIZE;
++
++      /* The query returns allocated blocks.  We must insert holes
++       * between the blocks as necessary.
++       */
++      if ((position < blk_offset &&
++           add_extent (extents, &position, blk_offset, true) == -1) ||
++          (add_extent (extents,
++                       &position, blk_offset + blk_length, false) == -1)) {
++        VDDK_CALL_START (VixDiskLib_FreeBlockList, "block_list")
++          VixDiskLib_FreeBlockList (block_list);
++        VDDK_CALL_END (VixDiskLib_FreeBlockList, 0);
++        nbdkit_extents_free (extents);
++        return -1;
++      }
++    }
++    VDDK_CALL_START (VixDiskLib_FreeBlockList, "block_list")
++      VixDiskLib_FreeBlockList (block_list);
++    VDDK_CALL_END (VixDiskLib_FreeBlockList, 0);
++
++    /* There's an implicit hole after the returned list of blocks,
++     * up to the end of the QueryAllocatedBlocks request.
++     */
++    if (add_extent (extents,
++                    &position,
++                    (start_sector + nr_sectors) * VIXDISKLIB_SECTOR_SIZE,
++                    true) == -1) {
++      nbdkit_extents_free (extents);
++      return -1;
++    }
++
++    start_sector += nr_sectors;
++    nr_chunks_remaining -= nr_chunks;
++  }
++
++  /* Add the allocated unaligned bit at the end. */
++  if (position < h->size) {
++    if (add_extent (extents, &position, h->size, false) == -1) {
++      nbdkit_extents_free (extents);
++      return -1;
++    }
++  }
++
++  /* Save the pre-cached extents in the handle. */
++  h->extents = extents;
++  return 0;
++}
++
++static int
++get_extents_from_cache (struct command *cmd, struct vddk_handle *h)
++{
++  struct nbdkit_extents *rextents = cmd->ptr;
++  struct nbdkit_extent e;
++  size_t i;
++
++  /* We can just copy from the pre-cached extents in the handle which
++   * cover the entire disk, into the returned extents, because
++   * nbdkit_add_extent does the right thing.
++   */
++  for (i = 0; i < nbdkit_extents_count (h->extents); ++i) {
++    e = nbdkit_get_extent (h->extents, i);
++    if (nbdkit_add_extent (rextents, e.offset, e.length, e.type) == -1)
++      return -1;
++  }
++
++  return 0;
++}
++
++/* Handle extents.
++ *
++ * Oh QueryAllocatedBlocks, how much I hate you.  The API has two
++ * enormous problems: (a) It's slow, taking about 1 second per
++ * invocation regardless of how much or little data you request.  (b)
++ * It serialises all other requests to the disk, like concurrent
++ * reads.
++ *
++ * NBD / nbdkit doesn't help much either by having a 4GB - 1 byte
++ * limit on the size of extent requests.  This means that for each 4GB
++ * of disk, we will need to run QueryAllocatedBlocks twice.  For a 1TB
++ * virtual disk, about 500 seconds would be used directly in the API
++ * calls, and much more time is lost because of serialization.
++ *
++ * To work around these problems, in the readonly case (used by
++ * virt-v2v), when the first NBD_BLOCK_STATUS request is received, we
++ * will read over the whole disk and cache the extents.  We will read
++ * in 32 GB chunks (the maximum possible for the underlying
++ * QueryAllocatedBlocks API).  For a 1TB disk this will take ~ 30
++ * seconds, but avoids all the overheads above.  The cached extents
++ * are stored in the handle, and subsequent NBD_BLOCK_STATUS will use
++ * the cache only.
++ *
++ * For writable disks we can't easily do any caching so don't attempt
++ * it.
++ */
++static int
++do_extents (struct command *cmd, struct vddk_handle *h)
++{
++  if (h->readonly && !h->extents) {
++    time_t start_t, end_t;
++
++    time (&start_t);
++    nbdkit_debug ("vddk: pre-caching extents");
++
++    if (pre_cache_extents (h) == -1)
++      return -1;
++
++    time (&end_t);
++    nbdkit_debug ("vddk: finished pre-caching extents in %d second(s)",
++                  (int) (end_t - start_t));
++  }
++
++  if (h->extents)
++    return get_extents_from_cache (cmd, h);
++  else
++    return get_extents_slow (cmd, h);
++}
++
+ /* Background worker thread, one per connection, which is where the
+  * VDDK commands are issued.
+  */
+-- 
+2.47.1
+

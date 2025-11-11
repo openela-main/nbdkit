@@ -1,0 +1,250 @@
+From ddd507afe350e5c4470c49e4e714914032c535c8 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 30 May 2025 13:49:10 +0100
+Subject: [PATCH] vddk: Move minimum version of VDDK to 6.7
+
+We can now assume that QueryAllocatedBlocks exists, as well as a
+couple of other functions, simplifying the code.
+
+This was released in 2018 (7 years ago) so there's been plenty of time
+to upgrade.
+
+(cherry picked from commit 7c90116664b1b1a3c3756d6a79d6d483bc6062dd)
+---
+ plugins/vddk/nbdkit-vddk-plugin.pod |  8 ++---
+ plugins/vddk/vddk-stubs.h           | 32 +++++++++++---------
+ plugins/vddk/vddk.c                 | 43 ++++++---------------------
+ plugins/vddk/worker.c               | 14 ++-------
+ tests/dummy-vddk.c                  | 45 +++++++++++++++++++++++++++--
+ 5 files changed, 76 insertions(+), 66 deletions(-)
+
+diff --git a/plugins/vddk/nbdkit-vddk-plugin.pod b/plugins/vddk/nbdkit-vddk-plugin.pod
+index 19f25423..e937942c 100644
+--- a/plugins/vddk/nbdkit-vddk-plugin.pod
++++ b/plugins/vddk/nbdkit-vddk-plugin.pod
+@@ -396,15 +396,13 @@ is I<not> recommended.
+ 
+ =over 4
+ 
+-=item VDDK E<ge> 6.5 (released Nov 2016)
++=item VDDK E<ge> 6.7 (released Apr 2018)
+ 
+ This is the minimum version of VDDK supported.  Older versions will
+ not work.
+ 
+-=item VDDK 6.7 (released Apr 2018)
+-
+-This is the first version that supported the
+-C<VixDiskLib_QueryAllocatedBlocks> API.  This is required to provide
++This is also the first version that supported the
++C<VixDiskLib_QueryAllocatedBlocks> API.  This is used to provide
+ sparseness (extent) information over NBD.
+ 
+ =item VDDK 8.0.2.1 (released Feb 2024)
+diff --git a/plugins/vddk/vddk-stubs.h b/plugins/vddk/vddk-stubs.h
+index 8620d11a..658c11f1 100644
+--- a/plugins/vddk/vddk-stubs.h
++++ b/plugins/vddk/vddk-stubs.h
+@@ -129,16 +129,22 @@ STUB (VixDiskLib_Wait,
+       VixError,
+       (VixDiskLibHandle handle));
+ 
+-/* Added in VDDK 6.7, these will be NULL for earlier versions: */
+-OPTIONAL_STUB (VixDiskLib_QueryAllocatedBlocks,
+-               VixError,
+-               (VixDiskLibHandle diskHandle,
+-                uint64_t start_sector, uint64_t nr_sectors,
+-                uint64_t chunk_size,
+-                VixDiskLibBlockList **block_list));
+-OPTIONAL_STUB (VixDiskLib_FreeBlockList,
+-               VixError,
+-               (VixDiskLibBlockList *block_list));
+-OPTIONAL_STUB (VixDiskLib_AllocateConnectParams,
+-               VixDiskLibConnectParams *,
+-               (void));
++/* Added in VDDK 6.7. */
++STUB (VixDiskLib_QueryAllocatedBlocks,
++      VixError,
++      (VixDiskLibHandle diskHandle,
++       uint64_t start_sector, uint64_t nr_sectors,
++       uint64_t chunk_size,
++       VixDiskLibBlockList **block_list));
++STUB (VixDiskLib_FreeBlockList,
++      VixError,
++      (VixDiskLibBlockList *block_list));
++STUB (VixDiskLib_AllocateConnectParams,
++      VixDiskLibConnectParams *,
++      (void));
++
++/* OPTIONAL_STUB can be used to add new APIs which are not supported
++ * by older versions of VDDK, and to make them NULL if not present.
++ * However VDDK >= 6.7 has everything we need for now so we are no
++ * longer using this macro.
++ */
+diff --git a/plugins/vddk/vddk.c b/plugins/vddk/vddk.c
+index 468971f4..9d49203c 100644
+--- a/plugins/vddk/vddk.c
++++ b/plugins/vddk/vddk.c
+@@ -652,37 +652,6 @@ vddk_dump_plugin (void)
+ /* Lock protecting open/close calls - see above. */
+ static pthread_mutex_t open_close_lock = PTHREAD_MUTEX_INITIALIZER;
+ 
+-static inline VixDiskLibConnectParams *
+-allocate_connect_params (void)
+-{
+-  VixDiskLibConnectParams *ret;
+-
+-  if (VixDiskLib_AllocateConnectParams != NULL) {
+-    VDDK_CALL_START (VixDiskLib_AllocateConnectParams, "")
+-      ret = VixDiskLib_AllocateConnectParams ();
+-    VDDK_CALL_END (VixDiskLib_AllocateConnectParams, 0);
+-  }
+-  else
+-    ret = calloc (1, sizeof (VixDiskLibConnectParams));
+-
+-  return ret;
+-}
+-
+-static inline void
+-free_connect_params (VixDiskLibConnectParams *params)
+-{
+-  /* Only use FreeConnectParams if AllocateConnectParams was
+-   * originally called.  Otherwise use free.
+-   */
+-  if (VixDiskLib_AllocateConnectParams != NULL) {
+-    VDDK_CALL_START (VixDiskLib_FreeConnectParams, "params")
+-      VixDiskLib_FreeConnectParams (params);
+-    VDDK_CALL_END (VixDiskLib_FreeConnectParams, 0);
+-  }
+-  else
+-    free (params);
+-}
+-
+ /* Create the per-connection handle. */
+ static void *
+ vddk_open (int readonly)
+@@ -704,7 +673,9 @@ vddk_open (int readonly)
+   pthread_mutex_init (&h->commands_lock, NULL);
+   pthread_cond_init (&h->commands_cond, NULL);
+ 
+-  h->params = allocate_connect_params ();
++  VDDK_CALL_START (VixDiskLib_AllocateConnectParams, "")
++    h->params = VixDiskLib_AllocateConnectParams ();
++  VDDK_CALL_END (VixDiskLib_AllocateConnectParams, 0);
+   if (h->params == NULL) {
+     nbdkit_error ("allocate VixDiskLibConnectParams: %m");
+     goto err0;
+@@ -837,7 +808,9 @@ vddk_open (int readonly)
+     VixDiskLib_Disconnect (h->connection);
+   VDDK_CALL_END (VixDiskLib_Disconnect, 0);
+  err1:
+-  free_connect_params (h->params);
++  VDDK_CALL_START (VixDiskLib_FreeConnectParams, "params")
++    VixDiskLib_FreeConnectParams (h->params);
++  VDDK_CALL_END (VixDiskLib_FreeConnectParams, 0);
+  err0:
+   pthread_mutex_destroy (&h->commands_lock);
+   pthread_cond_destroy (&h->commands_cond);
+@@ -863,7 +836,9 @@ vddk_close (void *handle)
+     VixDiskLib_Disconnect (h->connection);
+   VDDK_CALL_END (VixDiskLib_Disconnect, 0);
+ 
+-  free_connect_params (h->params);
++  VDDK_CALL_START (VixDiskLib_FreeConnectParams, "params")
++    VixDiskLib_FreeConnectParams (h->params);
++  VDDK_CALL_END (VixDiskLib_FreeConnectParams, 0);
+   pthread_mutex_destroy (&h->commands_lock);
+   pthread_cond_destroy (&h->commands_cond);
+   command_queue_reset (&h->commands);
+diff --git a/plugins/vddk/worker.c b/plugins/vddk/worker.c
+index 3bf1d5c2..076b2bd7 100644
+--- a/plugins/vddk/worker.c
++++ b/plugins/vddk/worker.c
+@@ -309,23 +309,13 @@ do_can_extents (struct command *cmd, struct vddk_handle *h)
+   VixError err;
+   VixDiskLibBlockList *block_list;
+ 
+-  /* This call was added in VDDK 6.7.  In earlier versions the
+-   * function pointer will be NULL and we cannot query extents.
+-   */
+-  if (VixDiskLib_QueryAllocatedBlocks == NULL) {
+-    nbdkit_debug ("can_extents: VixDiskLib_QueryAllocatedBlocks == NULL, "
+-                  "probably this is VDDK < 6.7");
+-    return 0;
+-  }
+-
+   /* Suppress errors around this call.  See:
+    * https://bugzilla.redhat.com/show_bug.cgi?id=1709211#c7
+    */
+   error_suppression = 1;
+ 
+-  /* However even when the call is available it rarely works well so
+-   * the best thing we can do here is to try the call and if it's
+-   * non-functional return false.
++  /* Try the QueryAllocatedBlocks call and if it's non-functional
++   * return false.
+    */
+   VDDK_CALL_START (VixDiskLib_QueryAllocatedBlocks,
+                    "handle, 0, %d sectors, %d sectors",
+diff --git a/tests/dummy-vddk.c b/tests/dummy-vddk.c
+index 8b45ea6b..5247173b 100644
+--- a/tests/dummy-vddk.c
++++ b/tests/dummy-vddk.c
+@@ -110,11 +110,52 @@ VixDiskLib_FreeErrorText (char *text)
+   free (text);
+ }
+ 
++NBDKIT_DLL_PUBLIC VixError
++VixDiskLib_QueryAllocatedBlocks (VixDiskLibHandle diskHandle,
++                                 uint64_t start_sector, uint64_t nr_sectors,
++                                 uint64_t chunk_size,
++                                 VixDiskLibBlockList **block_list)
++{
++  VixDiskLibBlockList *ret;
++
++  /* This is safe because ret->blocks is a 1-sized array and we only
++   * use 1 entry here.
++   */
++  ret = calloc (1, sizeof *ret);
++  if (ret == NULL)
++    abort ();
++
++  /* Pretend it's all allocated. */
++  ret->numBlocks = 1;
++  ret->blocks[0].offset = start_sector;
++  ret->blocks[0].length = nr_sectors;
++
++  *block_list = ret;
++  return VIX_OK;
++}
++
++NBDKIT_DLL_PUBLIC VixError
++VixDiskLib_FreeBlockList (VixDiskLibBlockList *block_list)
++{
++  free (block_list);
++  return VIX_OK;
++}
++
++NBDKIT_DLL_PUBLIC VixDiskLibConnectParams *
++VixDiskLib_AllocateConnectParams (void)
++{
++  VixDiskLibConnectParams *ret;
++
++  ret = calloc (1, sizeof *ret);
++  if (ret == NULL)
++    abort ();
++  return ret;
++}
++
+ NBDKIT_DLL_PUBLIC void
+ VixDiskLib_FreeConnectParams (VixDiskLibConnectParams *params)
+ {
+-  /* never called since we don't define optional AllocateConnectParams */
+-  abort ();
++  free (params);
+ }
+ 
+ NBDKIT_DLL_PUBLIC VixError
+-- 
+2.47.1
+

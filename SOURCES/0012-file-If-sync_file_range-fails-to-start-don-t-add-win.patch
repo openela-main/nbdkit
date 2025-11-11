@@ -1,0 +1,82 @@
+From 205fb5f8ebd72a37fb624e7d551ead313da2437b Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 28 Mar 2025 20:35:54 +0000
+Subject: [PATCH] file: If sync_file_range fails to start, don't add window to
+ list
+
+When starting the process of writing out the newest range, we
+previously didn't check if sync_file_range succeeded or failed.  But
+if it failed there's no reason to add it to the list of windows.  Also
+debug any failures.
+
+This shouldn't change any semantics as far as we're aware.
+
+Thanks: Eric Sandeen
+(cherry picked from commit d35f0636373e6a58c8f3fcfcf505af248e27c574)
+---
+ plugins/file/file.c | 48 ++++++++++++++++++++++++++-------------------
+ 1 file changed, 28 insertions(+), 20 deletions(-)
+
+diff --git a/plugins/file/file.c b/plugins/file/file.c
+index 6d0e77a1..638c960d 100644
+--- a/plugins/file/file.c
++++ b/plugins/file/file.c
+@@ -121,27 +121,35 @@ evict_writes (int fd, uint64_t offset, size_t len)
+ {
+   ACQUIRE_LOCK_FOR_CURRENT_SCOPE (&window_lock);
+ 
+-  /* Evict the oldest window from the page cache. */
+-  if (window[0].len > 0) {
+-    if (sync_file_range (window[0].fd, window[0].offset, window[0].len,
+-                         SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|
+-                         SYNC_FILE_RANGE_WAIT_AFTER) == -1)
+-      nbdkit_debug ("sync_file_range: wait: (ignored): %m");
+-    if (posix_fadvise (window[0].fd, window[0].offset, window[0].len,
+-                       POSIX_FADV_DONTNEED) == -1)
+-      nbdkit_debug ("posix_fadvise: POSIX_FADV_DONTNEED: (ignored): %m");
+-  }
+-
+-  /* Move the Nth window to N-1. */
+-  memmove (&window[0], &window[1], sizeof window[0] * (NR_WINDOWS-1));
+-
+-  /* Set up the current window and tell Linux to start writing it out
+-   * to disk (asynchronously).
++  /* Tell Linux to start writing the current range out to disk
++   * (asynchronously).
+    */
+-  sync_file_range (fd, offset, len, SYNC_FILE_RANGE_WRITE);
+-  window[NR_WINDOWS-1].fd = fd;
+-  window[NR_WINDOWS-1].offset = offset;
+-  window[NR_WINDOWS-1].len = len;
++  if (sync_file_range (fd, offset, len, SYNC_FILE_RANGE_WRITE) == -1) {
++    /* sync_file_range to start the write failed */
++    nbdkit_debug ("sync_file_range: write: (ignored): %m");
++  }
++  else {
++    /* sync_file_range to start the write succeeded, so
++     * evict the oldest window from the page cache.
++     */
++    if (window[0].len > 0) {
++      if (sync_file_range (window[0].fd, window[0].offset, window[0].len,
++                           SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|
++                           SYNC_FILE_RANGE_WAIT_AFTER) == -1)
++        nbdkit_debug ("sync_file_range: wait: (ignored): %m");
++      if (posix_fadvise (window[0].fd, window[0].offset, window[0].len,
++                         POSIX_FADV_DONTNEED) == -1)
++        nbdkit_debug ("posix_fadvise: POSIX_FADV_DONTNEED: (ignored): %m");
++    }
++
++    /* Move the Nth window to N-1. */
++    memmove (&window[0], &window[1], sizeof window[0] * (NR_WINDOWS-1));
++
++    /* Add the range to the newest end of the list of windows. */
++    window[NR_WINDOWS-1].fd = fd;
++    window[NR_WINDOWS-1].offset = offset;
++    window[NR_WINDOWS-1].len = len;
++  }
+ }
+ 
+ /* When we close the handle we must remove any windows which are still
+-- 
+2.47.1
+
