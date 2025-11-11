@@ -51,11 +51,11 @@
 %global verify_tarball_signature 1
 
 # The source directory.
-%global source_directory 1.40-stable
+%global source_directory 1.44-stable
 
 Name:           nbdkit
-Version:        1.40.4
-Release:        4%{?dist}
+Version:        1.44.1
+Release:        2%{?dist}
 Summary:        NBD server
 
 License:        BSD-3-Clause
@@ -77,15 +77,17 @@ Source2:        libguestfs.keyring
 Source3:        copy-patches.sh
 
 # Patches come from the upstream repository:
-# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-10.0/
+# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-10.1/
 
 # Patches.
-Patch0001:     0001-vddk-Include-stdbool.h.patch
-Patch0002:     0002-vddk-Cache-the-disk-size-in-the-handle.patch
-Patch0003:     0003-vddk-do_extents-Mark-some-local-variables-const.patch
-Patch0004:     0004-vddk-do_extents-Exit-the-function-if-we-hit-req_one-.patch
-Patch0005:     0005-vddk-do_extents-Avoid-reading-partial-chunk-beyond-t.patch
-Patch0006:     0006-server-Fix-.zero-fallback-path.patch
+Patch0001:     0001-common-Add-ONCE-macro-to-run-code-only-once.patch
+Patch0002:     0002-file-zero-Print-the-debug-message-on-the-fallback-pa.patch
+Patch0003:     0003-file-trim-Don-t-try-BLKDISCARD-if-earlier-FALLOC_FL_.patch
+Patch0004:     0004-common-include-test-once.c-Skip-test-on-macOS-which-.patch
+Patch0005:     0005-common-include-test-once.c-Further-fixes-for-pthread.patch
+Patch0006:     0006-Remove-deprecated-cacheextents-filter.patch
+Patch0007:     0007-New-filter-nbdkit-count-filter-count-bytes-read-writ.patch
+Patch0008:     0008-count-Clarify-documentation.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -104,6 +106,7 @@ BuildRequires:  git
 BuildRequires:  autoconf, automake, libtool
 
 BuildRequires:  make
+BuildRequires:  libxcrypt-devel
 BuildRequires:  gcc, gcc-c++
 BuildRequires:  %{_bindir}/pod2man
 BuildRequires:  pkgconfig(gnutls)
@@ -121,6 +124,10 @@ BuildRequires:  pkgconfig(bzip2)
 BuildRequires:  pkgconfig(libzstd)
 BuildRequires:  pkgconfig(libcurl)
 BuildRequires:  pkgconfig(libnbd)
+%if !0%{?rhel}
+# We require libnfs >= 6, but the internal version is >= 16
+BuildRequires:  pkgconfig(libnfs) >= 16
+%endif
 BuildRequires:  pkgconfig(libssh)
 BuildRequires:  e2fsprogs
 BuildRequires:  pkgconfig(ext2fs)
@@ -169,6 +176,9 @@ BuildRequires:  glibc-utils
 BuildRequires:  /usr/bin/hexdump
 BuildRequires:  /usr/sbin/ip
 BuildRequires:  jq
+%if !0%{?rhel}
+BuildRequires:  /usr/bin/lzip
+%endif
 BuildRequires:  /usr/bin/nbdcopy
 BuildRequires:  /usr/bin/nbdinfo
 BuildRequires:  /usr/bin/nbdsh
@@ -286,8 +296,6 @@ nbdkit-full-plugin          A virtual disk that returns ENOSPC errors.
 nbdkit-info-plugin          Serve client and server information.
 
 nbdkit-memory-plugin        A virtual memory plugin.
-
-nbdkit-ondemand-plugin      Create filesystems on demand.
 
 nbdkit-ones-plugin          Fill disk with repeated 0xff or other bytes.
 
@@ -444,6 +452,16 @@ This package lets you forward NBD connections from %{name}
 to another NBD server.
 
 
+%if !0%{?rhel}
+%package nfs-plugin
+Summary:        NFS (Network File Server) plugin for %{name}
+Requires:       %{name}-server%{?_isa} = %{version}-%{release}
+
+%description nfs-plugin
+This package contains Network File Server (NFS) support for %{name}.
+%endif
+
+
 %if !0%{?rhel} && 0%{?have_ocaml}
 %package ocaml-plugin
 Summary:        OCaml plugin for %{name}
@@ -464,6 +482,21 @@ Requires:       %{name}-ocaml-plugin%{?_isa} = %{version}-%{release}
 %description ocaml-plugin-devel
 This package lets you write OCaml plugins for %{name}.
 %endif
+
+
+%package ondemand-plugin
+Summary:        Create filesystems on demand for %{name}
+Requires:       %{name}-server%{?_isa} = %{version}-%{release}
+# For mkfs and mke2fs (defaults).
+Requires:       util-linux, e2fsprogs
+# For other filesystems.
+Suggests:       xfsprogs
+%if !0%{?rhel}
+Suggests:       ntfsprogs, dosfstools
+%endif
+
+%description ondemand-plugin
+This package is a plugin to create filesystems on demand for %{name}.
 
 
 %if !0%{?rhel}
@@ -548,7 +581,7 @@ This package is a BitTorrent plugin for %{name}.
 Summary:        VMware VDDK plugin for %{name}
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 # https://bugzilla.redhat.com/show_bug.cgi?id=1931818
-Requires:       libxcrypt-compat
+Requires:       libxcrypt-compat%{?_isa}
 
 %description vddk-plugin
 This package is a plugin for %{name} which connects to
@@ -573,9 +606,9 @@ nbdkit-blocksize-policy-filter  Set block size constraints and policy.
 
 nbdkit-cache-filter        Server-side cache.
 
-nbdkit-cacheextents-filter Cache extents.
-
 nbdkit-checkwrite-filter   Check writes match contents of plugin.
+
+nbdkit-count-filter        Count bytes read, written, zeroed and trimmed.
 
 nbdkit-cow-filter          Copy-on-write overlay for read-only plugins.
 
@@ -621,6 +654,8 @@ nbdkit-nozero-filter       Adjust handling of zero requests by plugins.
 
 nbdkit-offset-filter       Serve an offset and range.
 
+nbdkit-openonce-filter     Open the underlying plugin once.
+
 nbdkit-partition-filter    Serve a single partition.
 
 nbdkit-pause-filter        Pause NBD requests.
@@ -648,6 +683,8 @@ nbdkit-scan-filter         Prefetch data ahead of sequential reads.
 nbdkit-spinning-filter     Add seek delays to simulate a spinning hard disk.
 
 nbdkit-swab-filter         Filter for swapping byte order.
+
+nbdkit-time-limit-filter   Set an overall time limit for each connection.
 
 nbdkit-tls-fallback-filter TLS protection filter.
 
@@ -691,11 +728,11 @@ This package is a tar archive filter for %{name}.
 
 
 %package xz-filter
-Summary:        XZ filter for %{name}
+Summary:        XZ and lzip filters for %{name}
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
 
 %description xz-filter
-This package is the xz filter for %{name}.
+This package contains the xz and lzip filters for %{name}.
 
 
 %package devel
@@ -739,7 +776,7 @@ BuildRequires: selinux-policy-devel
 %{?selinux_requires}
 
 %description selinux
-%{nbdkit} SELinux policy module.
+%{name} SELinux policy module.
 %endif
 
 
@@ -885,10 +922,7 @@ bzip2 -9 %{modulename}.pp
 popd
 
 %if 0%{?have_mingw}
-# MC=no is a temporary hack until this bug is fixed in binutils:
-# https://sourceware.org/bugzilla/show_bug.cgi?id=31283
 %mingw_configure \
-    MC=no \
     --disable-static \
     --enable-shared \
     --with-extra='%{name}-%{version}-%{release}' \
@@ -1090,7 +1124,6 @@ fi
 %{_libdir}/%{name}/plugins/nbdkit-full-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-info-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-memory-plugin.so
-%{_libdir}/%{name}/plugins/nbdkit-ondemand-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-ones-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-partitioning-plugin.so
 %{_libdir}/%{name}/plugins/nbdkit-pattern-plugin.so
@@ -1106,7 +1139,6 @@ fi
 %{_mandir}/man1/nbdkit-full-plugin.1*
 %{_mandir}/man1/nbdkit-info-plugin.1*
 %{_mandir}/man1/nbdkit-memory-plugin.1*
-%{_mandir}/man1/nbdkit-ondemand-plugin.1*
 %{_mandir}/man1/nbdkit-ones-plugin.1*
 %{_mandir}/man1/nbdkit-partitioning-plugin.1*
 %{_mandir}/man1/nbdkit-pattern-plugin.1*
@@ -1220,6 +1252,15 @@ fi
 %{_mandir}/man1/nbdkit-nbd-plugin.1*
 
 
+%if !0%{?rhel}
+%files nfs-plugin
+%doc README.md
+%license LICENSE
+%{_libdir}/%{name}/plugins/nbdkit-nfs-plugin.so
+%{_mandir}/man1/nbdkit-nfs-plugin.1*
+%endif
+
+
 %if !0%{?rhel} && 0%{?have_ocaml}
 %files ocaml-plugin
 %doc README.md
@@ -1232,6 +1273,13 @@ fi
 %{_mandir}/man3/nbdkit-ocaml-plugin.3*
 %{_mandir}/man3/NBDKit.3*
 %endif
+
+
+%files ondemand-plugin
+%doc README.md
+%license LICENSE
+%{_libdir}/%{name}/plugins/nbdkit-ondemand-plugin.so
+%{_mandir}/man1/nbdkit-ondemand-plugin.1*
 
 
 %if !0%{?rhel}
@@ -1306,8 +1354,8 @@ fi
 %{_libdir}/%{name}/filters/nbdkit-blocksize-filter.so
 %{_libdir}/%{name}/filters/nbdkit-blocksize-policy-filter.so
 %{_libdir}/%{name}/filters/nbdkit-cache-filter.so
-%{_libdir}/%{name}/filters/nbdkit-cacheextents-filter.so
 %{_libdir}/%{name}/filters/nbdkit-checkwrite-filter.so
+%{_libdir}/%{name}/filters/nbdkit-count-filter.so
 %{_libdir}/%{name}/filters/nbdkit-cow-filter.so
 %{_libdir}/%{name}/filters/nbdkit-ddrescue-filter.so
 %{_libdir}/%{name}/filters/nbdkit-delay-filter.so
@@ -1330,6 +1378,7 @@ fi
 %{_libdir}/%{name}/filters/nbdkit-noparallel-filter.so
 %{_libdir}/%{name}/filters/nbdkit-nozero-filter.so
 %{_libdir}/%{name}/filters/nbdkit-offset-filter.so
+%{_libdir}/%{name}/filters/nbdkit-openonce-filter.so
 %{_libdir}/%{name}/filters/nbdkit-partition-filter.so
 %{_libdir}/%{name}/filters/nbdkit-pause-filter.so
 %{_libdir}/%{name}/filters/nbdkit-protect-filter.so
@@ -1345,13 +1394,14 @@ fi
 %{_libdir}/%{name}/filters/nbdkit-scan-filter.so
 %{_libdir}/%{name}/filters/nbdkit-spinning-filter.so
 %{_libdir}/%{name}/filters/nbdkit-swab-filter.so
+%{_libdir}/%{name}/filters/nbdkit-time-limit-filter.so
 %{_libdir}/%{name}/filters/nbdkit-tls-fallback-filter.so
 %{_libdir}/%{name}/filters/nbdkit-truncate-filter.so
 %{_mandir}/man1/nbdkit-blocksize-filter.1*
 %{_mandir}/man1/nbdkit-blocksize-policy-filter.1*
 %{_mandir}/man1/nbdkit-cache-filter.1*
-%{_mandir}/man1/nbdkit-cacheextents-filter.1*
 %{_mandir}/man1/nbdkit-checkwrite-filter.1*
+%{_mandir}/man1/nbdkit-count-filter.1*
 %{_mandir}/man1/nbdkit-cow-filter.1*
 %{_mandir}/man1/nbdkit-ddrescue-filter.1*
 %{_mandir}/man1/nbdkit-delay-filter.1*
@@ -1374,6 +1424,7 @@ fi
 %{_mandir}/man1/nbdkit-noparallel-filter.1*
 %{_mandir}/man1/nbdkit-nozero-filter.1*
 %{_mandir}/man1/nbdkit-offset-filter.1*
+%{_mandir}/man1/nbdkit-openonce-filter.1*
 %{_mandir}/man1/nbdkit-partition-filter.1*
 %{_mandir}/man1/nbdkit-pause-filter.1*
 %{_mandir}/man1/nbdkit-protect-filter.1*
@@ -1389,6 +1440,7 @@ fi
 %{_mandir}/man1/nbdkit-scan-filter.1*
 %{_mandir}/man1/nbdkit-spinning-filter.1*
 %{_mandir}/man1/nbdkit-swab-filter.1*
+%{_mandir}/man1/nbdkit-time-limit-filter.1*
 %{_mandir}/man1/nbdkit-tls-fallback-filter.1*
 %{_mandir}/man1/nbdkit-truncate-filter.1*
 
@@ -1426,7 +1478,9 @@ fi
 %files xz-filter
 %doc README.md
 %license LICENSE
+%{_libdir}/%{name}/filters/nbdkit-lzip-filter.so
 %{_libdir}/%{name}/filters/nbdkit-xz-filter.so
+%{_mandir}/man1/nbdkit-lzip-filter.1*
 %{_mandir}/man1/nbdkit-xz-filter.1*
 
 
@@ -1459,6 +1513,7 @@ fi
 %{_mandir}/man3/nbdkit-plugin.3*
 %{_mandir}/man3/nbdkit_*.3*
 %{_mandir}/man1/nbdkit-release-notes-1.*.1*
+%{_mandir}/man3/nbdkit-tracing.3*
 %{_libdir}/pkgconfig/nbdkit.pc
 
 
@@ -1503,9 +1558,32 @@ fi
 
 
 %changelog
-* Sat Jul 05 2025 Richard W.M. Jones <rjones@redhat.com> - 1.40.4-4
+* Wed Jul 09 2025 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-2
+- Rebase to nbdkit 1.44.1
+  resolves: RHEL-78830, RHEL-101180
+- Synch the spec file with Fedora Rawhide.
+- nbdkit-ondemand-plugin moves into a new subpackage.
+- New nbdkit-count-filter & nbdkit-time-limit-filter.
+- Remove nbdkit-cacheextents-filter.
+- Add extra system call checking and debugging to nbdkit-file-plugin
+  resolves: RHEL-85515
+- Allow nbdkit-file-plugin to zero and trim block devices
+  resolves: RHEL-89371
+- vddk: Pre-cache the extents for readonly connections
+  resolves: RHEL-94825
+- Log filename, offset and count in nbdkit-file-plugin error messages
+  resolves: RHEL-95364
+- vddk: Improve statistics
+  related: RHEL-94825
+- CVE-2025-47711 denial of service attack by client sending maximum size block
+  status
+- CVE-2025-47712 denial of service attack by client sending large unaligned
+  size block status
+  resolves: RHEL-95819
+- Add support for VDDK 9.0.0.0
+  resolves: RHEL-99467
 - server: Fix .zero fallback path
-  resolves: RHEL-101701
+  resolves: RHEL-101636
 
 * Mon Jan 06 2025 Richard W.M. Jones <rjones@redhat.com> - 1.40.4-3
 - vddk: Avoid reading partial chunk beyond the end of the disk

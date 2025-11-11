@@ -1,0 +1,41 @@
+From 745b959b44a67cd3def7c60b873701ad79137bda Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 8 Jul 2025 21:20:52 +0100
+Subject: [PATCH] count: Clarify documentation
+
+Updates: commit 3512c3ce9308b4d940119ac6cc87f1baa9afb655
+(cherry picked from commit 7c84314ec7411fc1090bf1ca417c453d08fcf364)
+---
+ filters/count/nbdkit-count-filter.pod | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/filters/count/nbdkit-count-filter.pod b/filters/count/nbdkit-count-filter.pod
+index f0437000..c20b4737 100644
+--- a/filters/count/nbdkit-count-filter.pod
++++ b/filters/count/nbdkit-count-filter.pod
+@@ -4,17 +4,19 @@ nbdkit-count-filter - count bytes read, written, zeroed and trimmed
+ 
+ =head1 SYNOPSIS
+ 
+- nbdkit --filter=count plugin
++ nbdkit -fv --filter=count plugin
+ 
+ =head1 DESCRIPTION
+ 
+ C<nbdkit-count-filter> is a filter for L<nbdkit(1)> that simply counts
+ the number of bytes that are read, written, zeroed and trimmed, and
+ reports this number in debugging output when the filter is unloaded
+-(usually when nbdkit exits).
++(usually when nbdkit exits).  The filter output can only be seen when
++debugging is enabled (I<-v>) which usually implies using the
++foreground (I<-f>) option as well.
+ 
+ This is a very simple and lightweight filter.  For much more
+-comprehensive stats about and logging of operations, use
++comprehensive stats and logging of operations, use
+ L<nbdkit-stats-filter(1)> or L<nbdkit-log-filter(1)> instead.
+ 
+ =head1 PARAMETERS
+-- 
+2.47.1
+

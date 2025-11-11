@@ -1,0 +1,692 @@
+From dc8c6aae6aa1c62083421e2b2ce2988e970f2579 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 1 Jul 2025 13:26:08 +0100
+Subject: [PATCH] Remove deprecated cacheextents filter
+
+This is removed along the development branch (1.45) and in the next
+stable version of nbdkit (1.46).
+
+(cherry picked from commit 886050f6de9179b0e267e15b20376313090b2d3c)
+---
+ configure.ac                                  |   2 -
+ docs/nbdkit-protocol.pod                      |   9 +-
+ docs/nbdkit-release-notes-1.14.pod            |   2 +-
+ docs/nbdkit-release-notes-1.44.pod            |   2 +-
+ filters/cache/nbdkit-cache-filter.pod         |   8 +-
+ filters/cacheextents/Makefile.am              |  74 ------
+ filters/cacheextents/cacheextents.c           | 212 ------------------
+ .../nbdkit-cacheextents-filter.pod            |  76 -------
+ filters/cow/nbdkit-cow-filter.pod             |   1 -
+ .../extentlist/nbdkit-extentlist-filter.pod   |   1 -
+ tests/Makefile.am                             |   4 -
+ tests/test-cacheextents.sh                    | 114 ----------
+ 12 files changed, 9 insertions(+), 496 deletions(-)
+ delete mode 100644 filters/cacheextents/Makefile.am
+ delete mode 100644 filters/cacheextents/cacheextents.c
+ delete mode 100644 filters/cacheextents/nbdkit-cacheextents-filter.pod
+ delete mode 100755 tests/test-cacheextents.sh
+
+diff --git a/configure.ac b/configure.ac
+index 0dca333f..9b057e6f 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -143,7 +143,6 @@ filters="\
+         blocksize-policy \
+         bzip2 \
+         cache \
+-        cacheextents \
+         checkwrite \
+         cow \
+         ddrescue \
+@@ -1787,7 +1786,6 @@ AC_CONFIG_FILES([Makefile
+                  filters/blocksize-policy/Makefile
+                  filters/bzip2/Makefile
+                  filters/cache/Makefile
+-                 filters/cacheextents/Makefile
+                  filters/checkwrite/Makefile
+                  filters/cow/Makefile
+                  filters/ddrescue/Makefile
+diff --git a/docs/nbdkit-protocol.pod b/docs/nbdkit-protocol.pod
+index ef1934fd..93f5c5fa 100644
+--- a/docs/nbdkit-protocol.pod
++++ b/docs/nbdkit-protocol.pod
+@@ -275,14 +275,13 @@ filters do not work properly in this case.
+    blocksize-policy        Yes
+    bzip2                   No
+    cache                   No
+-   cacheextents            No
+    checkwrite              Yes
+    cow                     Yes, since 1.44
+    delay                   Yes
+    error                   Yes
+    evil                    Yes
+-
+    exitlast                Yes
++
+    exitwhen                Yes
+    exportname              Yes
+    ext2                    No
+@@ -292,8 +291,8 @@ filters do not work properly in this case.
+    ip                      Yes
+    limit                   Yes
+    log                     Yes
+-
+    luks                    No
++
+    lzip                    No
+    multi-conn              Yes
+    nocache                 Yes
+@@ -303,8 +302,8 @@ filters do not work properly in this case.
+    nozero                  Yes
+    offset                  Yes, but unlikely to be useful
+    openonce                Yes
+-
+    partition               No
++
+    pause                   Yes
+    protect                 Yes, but unlikely to be useful
+    qcow2dec                No
+@@ -314,8 +313,8 @@ filters do not work properly in this case.
+    retry                   Yes
+    retry-request           Yes
+    rotational              Yes
+-
+    scan                    Yes
++
+    spinning                Yes
+    stats                   Yes
+    swab                    Yes
+diff --git a/docs/nbdkit-release-notes-1.14.pod b/docs/nbdkit-release-notes-1.14.pod
+index 627e7e88..3c8c5d53 100644
+--- a/docs/nbdkit-release-notes-1.14.pod
++++ b/docs/nbdkit-release-notes-1.14.pod
+@@ -50,7 +50,7 @@ plugin’s own choice of thread model.  Used to determine how the thread
+ model affects performance, or to serialize plugins if required (Eric
+ Blake).
+ 
+-New L<nbdkit-cacheextents-filter(1)> to cache extents requests,
++New nbdkit-cacheextents-filter to cache extents requests,
+ especially useful with VDDK which has a slow implementation of extents
+ (Martin Kletzander).
+ 
+diff --git a/docs/nbdkit-release-notes-1.44.pod b/docs/nbdkit-release-notes-1.44.pod
+index 62d69aa5..e5872763 100644
+--- a/docs/nbdkit-release-notes-1.44.pod
++++ b/docs/nbdkit-release-notes-1.44.pod
+@@ -59,7 +59,7 @@ eg. C<@4M> to move the offset to 4194304 (Eric Blake).
+ New L<nbdkit-openonce-filter(1)> which can be used to open the
+ underlying plugin once, sharing the plugin across connections.
+ 
+-L<nbdkit-cacheextents-filter(1)> I<has been deprecated>, and is
++I<nbdkit-cacheextents-filter has been deprecated>, and is
+ expected to be removed in S<nbdkit 1.46>.
+ 
+ L<nbdkit-cow-filter(1)> now understands that the NBD protocol export
+diff --git a/filters/cache/nbdkit-cache-filter.pod b/filters/cache/nbdkit-cache-filter.pod
+index ffa86919..7a64ca66 100644
+--- a/filters/cache/nbdkit-cache-filter.pod
++++ b/filters/cache/nbdkit-cache-filter.pod
+@@ -29,10 +29,9 @@ does not have effective caching, or (with C<cache=unsafe>) to defeat
+ flush requests from the client (which is unsafe and can cause data
+ loss, as the name suggests).
+ 
+-This filter only caches image contents.  To cache image metadata, use
+-L<nbdkit-cacheextents-filter(1)> between this filter and the plugin.
+-To accelerate sequential reads, use L<nbdkit-readahead-filter(1)> or
+-L<nbdkit-scan-filter(1)> on top of this filter.
++This filter only caches image contents.  To accelerate sequential
++reads, use L<nbdkit-readahead-filter(1)> or L<nbdkit-scan-filter(1)>
++on top of this filter.
+ 
+ =head1 PARAMETERS
+ 
+@@ -181,7 +180,6 @@ C<nbdkit-cache-filter> first appeared in nbdkit 1.2.
+ 
+ L<nbdkit(1)>,
+ L<nbdkit-file-plugin(1)>,
+-L<nbdkit-cacheextents-filter(1)>,
+ L<nbdkit-cow-filter(1)>,
+ L<nbdkit-readahead-filter(1)>,
+ L<nbdkit-filter(3)>,
+diff --git a/filters/cacheextents/Makefile.am b/filters/cacheextents/Makefile.am
+deleted file mode 100644
+index 26ac6642..00000000
+--- a/filters/cacheextents/Makefile.am
++++ /dev/null
+@@ -1,74 +0,0 @@
+-# nbdkit
+-# Copyright Red Hat
+-#
+-# Redistribution and use in source and binary forms, with or without
+-# modification, are permitted provided that the following conditions are
+-# met:
+-#
+-# * Redistributions of source code must retain the above copyright
+-# notice, this list of conditions and the following disclaimer.
+-#
+-# * Redistributions in binary form must reproduce the above copyright
+-# notice, this list of conditions and the following disclaimer in the
+-# documentation and/or other materials provided with the distribution.
+-#
+-# * Neither the name of Red Hat nor the names of its contributors may be
+-# used to endorse or promote products derived from this software without
+-# specific prior written permission.
+-#
+-# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
+-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+-# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+-# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
+-# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+-# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+-# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+-# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+-# SUCH DAMAGE.
+-
+-include $(top_srcdir)/common-rules.mk
+-
+-EXTRA_DIST = nbdkit-cacheextents-filter.pod
+-
+-filter_LTLIBRARIES = nbdkit-cacheextents-filter.la
+-
+-nbdkit_cacheextents_filter_la_SOURCES = \
+-	cacheextents.c \
+-	$(top_srcdir)/include/nbdkit-filter.h \
+-	$(NULL)
+-
+-nbdkit_cacheextents_filter_la_CPPFLAGS = \
+-	-I$(top_srcdir)/include \
+-	-I$(top_builddir)/include \
+-	-I$(top_srcdir)/common/include \
+-	-I$(top_srcdir)/common/utils \
+-	$(NULL)
+-nbdkit_cacheextents_filter_la_CFLAGS = $(WARNINGS_CFLAGS)
+-nbdkit_cacheextents_filter_la_LDFLAGS = \
+-	-module -avoid-version -shared $(NO_UNDEFINED_ON_WINDOWS) \
+-	$(NULL)
+-if USE_LINKER_SCRIPT
+-nbdkit_cacheextents_filter_la_LDFLAGS += \
+-	-Wl,--version-script=$(top_srcdir)/filters/filters.syms
+-endif
+-nbdkit_cacheextents_filter_la_LIBADD = \
+-	$(top_builddir)/common/utils/libutils.la \
+-	$(top_builddir)/common/replacements/libcompat.la \
+-	$(IMPORT_LIBRARY_ON_WINDOWS) \
+-	$(NULL)
+-
+-if HAVE_POD
+-
+-man_MANS = nbdkit-cacheextents-filter.1
+-CLEANFILES += $(man_MANS)
+-
+-nbdkit-cacheextents-filter.1: nbdkit-cacheextents-filter.pod \
+-		$(top_builddir)/podwrapper.pl
+-	$(PODWRAPPER) --section=1 --man $@ \
+-	    --html $(top_builddir)/html/$@.html \
+-	    $<
+-
+-endif HAVE_POD
+diff --git a/filters/cacheextents/cacheextents.c b/filters/cacheextents/cacheextents.c
+deleted file mode 100644
+index 71f73c41..00000000
+--- a/filters/cacheextents/cacheextents.c
++++ /dev/null
+@@ -1,212 +0,0 @@
+-/* nbdkit
+- * Copyright Red Hat
+- *
+- * Redistribution and use in source and binary forms, with or without
+- * modification, are permitted provided that the following conditions are
+- * met:
+- *
+- * * Redistributions of source code must retain the above copyright
+- * notice, this list of conditions and the following disclaimer.
+- *
+- * * Redistributions in binary form must reproduce the above copyright
+- * notice, this list of conditions and the following disclaimer in the
+- * documentation and/or other materials provided with the distribution.
+- *
+- * * Neither the name of Red Hat nor the names of its contributors may be
+- * used to endorse or promote products derived from this software without
+- * specific prior written permission.
+- *
+- * THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
+- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+- * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
+- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+- * USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+- * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+- * SUCH DAMAGE.
+- */
+-
+-#include <config.h>
+-
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <stdint.h>
+-#include <string.h>
+-#include <errno.h>
+-#include <inttypes.h>
+-
+-#include <pthread.h>
+-
+-#include <nbdkit-filter.h>
+-
+-#include "cleanup.h"
+-
+-/* -D cacheextents.cache=1: Debug cache operations. */
+-NBDKIT_DLL_PUBLIC int cacheextents_debug_cache = 0;
+-
+-/* This lock protects the global state. */
+-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+-
+-/* Cached extents from the last extents () call and its start and end
+- * for the sake of simplicity.
+- */
+-struct nbdkit_extents *cache_extents;
+-static uint64_t cache_start;
+-static uint64_t cache_end;
+-
+-static void
+-cacheextents_unload (void)
+-{
+-  nbdkit_extents_free (cache_extents);
+-}
+-
+-static int
+-cacheextents_add (struct nbdkit_extents *extents, int *err)
+-{
+-  size_t i = 0;
+-
+-  for (i = 0; i < nbdkit_extents_count (cache_extents); i++) {
+-    struct nbdkit_extent ex = nbdkit_get_extent (cache_extents, i);
+-    if (nbdkit_add_extent (extents, ex.offset, ex.length, ex.type) == -1) {
+-      *err = errno;
+-      return -1;
+-    }
+-  }
+-
+-  return 0;
+-}
+-
+-static int
+-fill (struct nbdkit_extents *extents, int *err)
+-{
+-  size_t i = 0;
+-  size_t count = nbdkit_extents_count (extents);
+-  struct nbdkit_extent first = nbdkit_get_extent (extents, 0);
+-  struct nbdkit_extent last = nbdkit_get_extent (extents, count - 1);
+-
+-  nbdkit_extents_free (cache_extents);
+-  cache_start = first.offset;
+-  cache_end = last.offset + last.length;
+-  cache_extents = nbdkit_extents_new (cache_start, cache_end);
+-
+-  if (!cache_extents)
+-    return -1;
+-
+-  for (i = 0; i < count; i++) {
+-    struct nbdkit_extent ex = nbdkit_get_extent (extents, i);
+-
+-    if (cacheextents_debug_cache)
+-      nbdkit_debug ("cacheextents: updating cache with:"
+-                    " offset=%" PRIu64
+-                    " length=%" PRIu64
+-                    " type=%x",
+-                    ex.offset, ex.length, ex.type);
+-
+-    if (nbdkit_add_extent (cache_extents, ex.offset, ex.length,
+-                           ex.type) == -1) {
+-      *err = errno;
+-      nbdkit_extents_free (cache_extents);
+-      cache_extents = NULL;
+-      return -1;
+-    }
+-  }
+-
+-  return 0;
+-}
+-
+-static int
+-cacheextents_extents (nbdkit_next *next,
+-                      void *handle, uint32_t count, uint64_t offset,
+-                      uint32_t flags,
+-                      struct nbdkit_extents *extents,
+-                      int *err)
+-{
+-  ACQUIRE_LOCK_FOR_CURRENT_SCOPE (&lock);
+-
+-  if (cacheextents_debug_cache)
+-    nbdkit_debug ("cacheextents:"
+-                  " cache_start=%" PRIu64
+-                  " cache_end=%" PRIu64
+-                  " cache_extents=%p",
+-                  cache_start, cache_end, cache_extents);
+-
+-  if (cache_extents &&
+-      offset >= cache_start && offset < cache_end) {
+-    if (cacheextents_debug_cache)
+-      nbdkit_debug ("cacheextents: returning from cache");
+-    return cacheextents_add (extents, err);
+-  }
+-
+-  if (cacheextents_debug_cache)
+-    nbdkit_debug ("cacheextents: cache miss");
+-
+-  /* Clear REQ_ONE to ask the plugin for as much information as it is
+-   * willing to return (the plugin may still truncate if it is too
+-   * costly to provide everything).
+-   */
+-  flags &= ~(NBDKIT_FLAG_REQ_ONE);
+-  if (next->extents (next, count, offset, flags, extents, err) == -1)
+-    return -1;
+-
+-  return fill (extents, err);
+-}
+-
+-/* Any changes to the data needs to clean the cache.
+- *
+- * Similar to the readahead filter this could be more intelligent, but
+- * there would be very little benefit.
+- */
+-
+-static void
+-kill_cacheextents (void)
+-{
+-  ACQUIRE_LOCK_FOR_CURRENT_SCOPE (&lock);
+-  nbdkit_extents_free (cache_extents);
+-  cache_extents = NULL;
+-}
+-
+-static int
+-cacheextents_pwrite (nbdkit_next *next,
+-                     void *handle,
+-                     const void *buf, uint32_t count, uint64_t offset,
+-                     uint32_t flags, int *err)
+-{
+-  kill_cacheextents ();
+-  return next->pwrite (next, buf, count, offset, flags, err);
+-}
+-
+-static int
+-cacheextents_trim (nbdkit_next *next,
+-                   void *handle,
+-                   uint32_t count, uint64_t offset, uint32_t flags,
+-                   int *err)
+-{
+-  kill_cacheextents ();
+-  return next->trim (next, count, offset, flags, err);
+-}
+-
+-static int
+-cacheextents_zero (nbdkit_next *next,
+-                   void *handle,
+-                   uint32_t count, uint64_t offset, uint32_t flags,
+-                   int *err)
+-{
+-  kill_cacheextents ();
+-  return next->zero (next, count, offset, flags, err);
+-}
+-
+-static struct nbdkit_filter filter = {
+-  .name              = "cacheextents",
+-  .longname          = "nbdkit cacheextents filter",
+-  .unload            = cacheextents_unload,
+-  .pwrite            = cacheextents_pwrite,
+-  .trim              = cacheextents_trim,
+-  .zero              = cacheextents_zero,
+-  .extents           = cacheextents_extents,
+-};
+-
+-NBDKIT_REGISTER_FILTER (filter)
+diff --git a/filters/cacheextents/nbdkit-cacheextents-filter.pod b/filters/cacheextents/nbdkit-cacheextents-filter.pod
+deleted file mode 100644
+index 0693ca80..00000000
+--- a/filters/cacheextents/nbdkit-cacheextents-filter.pod
++++ /dev/null
+@@ -1,76 +0,0 @@
+-=head1 NAME
+-
+-nbdkit-cacheextents-filter - cache extents
+-
+-=head1 SYNOPSIS
+-
+- nbdkit --filter=cacheextents plugin
+-
+-=head1 DEPRECATED
+-
+-B<The cacheextents filter is deprecated in S<nbdkit E<ge> 1.43.10> and
+-will be removed in S<nbdkit 1.46>>.  There is no direct replacement,
+-but as the filter only worked for a narrow and unusual range of access
+-patterns it is likely that it has no effect and you can just stop
+-using it.
+-
+-=head1 DESCRIPTION
+-
+-C<nbdkit-cacheextents-filter> is a filter that caches the result of last
+-extents() call.
+-
+-A common use for this filter is to improve performance when using a
+-client performing a linear pass over the entire image while asking for
+-only one extent at a time (such as S<C<qemu-img convert>>), but where
+-the plugin can provide multiple extents for the same high latency as a
+-single extent (such as L<nbdkit-vddk-plugin(1)>).  For example:
+-
+- nbdkit --filter=cacheextents --run 'qemu-img map "$uri"' vddk ...
+-
+-For files with big extents (when it is unlikely for one extents() call
+-to return multiple different extents) this does not slow down the
+-access.
+-
+-This filter only caches image metadata; to also cache image contents,
+-place this filter between L<nbdkit-cache-filter(1)> and the plugin.
+-
+-=head1 PARAMETERS
+-
+-There are no parameters specific to nbdkit-cacheextents-filter.  Any
+-parameters are passed through to and processed by the underlying
+-plugin in the normal way.
+-
+-=head1 FILES
+-
+-=over 4
+-
+-=item F<$filterdir/nbdkit-cacheextents-filter.so>
+-
+-The filter.
+-
+-Use C<nbdkit --dump-config> to find the location of C<$filterdir>.
+-
+-=back
+-
+-=head1 VERSION
+-
+-C<nbdkit-cacheextents-filter> first appeared in nbdkit 1.14.
+-
+-=head1 SEE ALSO
+-
+-L<nbdkit(1)>,
+-L<nbdkit-cache-filter(1)>,
+-L<nbdkit-extentlist-filter(1)>,
+-L<nbdkit-readahead-filter(1)>,
+-L<nbdkit-scan-filter(1)>,
+-L<nbdkit-vddk-plugin(1)>,
+-L<nbdkit-filter(3)>,
+-L<qemu-img(1)>.
+-
+-=head1 AUTHORS
+-
+-Martin Kletzander
+-
+-=head1 COPYRIGHT
+-
+-Copyright Red Hat
+diff --git a/filters/cow/nbdkit-cow-filter.pod b/filters/cow/nbdkit-cow-filter.pod
+index fd551d93..9462a28d 100644
+--- a/filters/cow/nbdkit-cow-filter.pod
++++ b/filters/cow/nbdkit-cow-filter.pod
+@@ -169,7 +169,6 @@ C<nbdkit-cow-filter> first appeared in nbdkit 1.2.
+ L<nbdkit(1)>,
+ L<nbdkit-file-plugin(1)>,
+ L<nbdkit-cache-filter(1)>,
+-L<nbdkit-cacheextents-filter(1)>,
+ L<nbdkit-xz-filter(1)>,
+ L<nbdkit-filter(3)>,
+ L<nbdcopy(1)>,
+diff --git a/filters/extentlist/nbdkit-extentlist-filter.pod b/filters/extentlist/nbdkit-extentlist-filter.pod
+index d5ac81eb..44c81635 100644
+--- a/filters/extentlist/nbdkit-extentlist-filter.pod
++++ b/filters/extentlist/nbdkit-extentlist-filter.pod
+@@ -85,7 +85,6 @@ C<nbdkit-extentlist-filter> first appeared in nbdkit 1.18.
+ =head1 SEE ALSO
+ 
+ L<nbdkit(1)>,
+-L<nbdkit-cacheextents-filter(1)>,
+ L<nbdkit-noextents-filter(1)>,
+ L<nbdkit-filter(3)>,
+ L<nbdkit-plugin(3)>.
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index 6d94c327..c16b5912 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -1694,10 +1694,6 @@ EXTRA_DIST += \
+ 	test-cache-unaligned.sh \
+ 	$(NULL)
+ 
+-# cacheextents filter test.
+-TESTS += test-cacheextents.sh
+-EXTRA_DIST += test-cacheextents.sh
+-
+ # checkwrite filter test.
+ TESTS += \
+ 	test-checkwrite.sh \
+diff --git a/tests/test-cacheextents.sh b/tests/test-cacheextents.sh
+deleted file mode 100755
+index 34d66217..00000000
+--- a/tests/test-cacheextents.sh
++++ /dev/null
+@@ -1,114 +0,0 @@
+-#!/usr/bin/env bash
+-# nbdkit
+-# Copyright Red Hat
+-#
+-# Redistribution and use in source and binary forms, with or without
+-# modification, are permitted provided that the following conditions are
+-# met:
+-#
+-# * Redistributions of source code must retain the above copyright
+-# notice, this list of conditions and the following disclaimer.
+-#
+-# * Redistributions in binary form must reproduce the above copyright
+-# notice, this list of conditions and the following disclaimer in the
+-# documentation and/or other materials provided with the distribution.
+-#
+-# * Neither the name of Red Hat nor the names of its contributors may be
+-# used to endorse or promote products derived from this software without
+-# specific prior written permission.
+-#
+-# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
+-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+-# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+-# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
+-# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+-# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+-# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+-# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+-# SUCH DAMAGE.
+-
+-source ./functions.sh
+-set -x
+-set -u
+-set -e
+-
+-requires_plugin sh
+-requires_filter cacheextents
+-requires grep --version
+-requires qemu-io --version
+-requires dd iflag=count_bytes </dev/null
+-
+-sock=$(mktemp -u /tmp/nbdkit-test-sock.XXXXXX)
+-sockurl="nbd+unix:///?socket=$sock"
+-pidfile="test-cacheextents.pid"
+-accessfile="test-cacheextents-access.log"
+-accessfile_full="$PWD/test-cacheextents-access.log"
+-files="$pidfile $sock"
+-rm -f $files $accessfile
+-cleanup_fn rm -f $files
+-
+-define plugin <<'EOF'
+-echo "Call: $@" >>$accessfile_full
+-size=4M
+-block_size=$((1024*1024))
+-case "$1" in
+-  thread_model) echo parallel ;;
+-  get_size) echo $size ;;
+-  can_extents) ;;
+-  extents)
+-    echo "extents request: $@" >>$accessfile_full
+-    offset=$(($4 / $block_size))
+-    count=$(($3 / $block_size))
+-    length=$(($offset + $count))
+-    for i in $(seq $offset $length); do
+-      echo ${i}M $block_size $((i%4)) >>$accessfile_full
+-      echo ${i}M $block_size $((i%4))
+-    done
+-    ;;
+-  pread) dd if=/dev/zero count=$3 iflag=count_bytes ;;
+-  can_write) ;;
+-  pwrite) dd of=/dev/null ;;
+-  can_trim) ;;
+-  trim) ;;
+-  can_zero) ;;
+-  zero) ;;
+-  *) exit 2 ;;
+-esac
+-EOF
+-
+-export accessfile_full
+-start_nbdkit \
+-    -P $pidfile \
+-    -U $sock \
+-    --filter=cacheextents \
+-    sh - <<<"$plugin"
+-
+-test_me() {
+-    num_accesses=$1
+-    shift
+-
+-    qemu-io -f raw "$@" "$sockurl"
+-    test "$(grep -c "^extents request: " $accessfile)" -eq "$num_accesses"
+-    ret=$?
+-    rm -f "$accessfile"
+-    return $ret
+-}
+-
+-# First one causes caching, the rest should be returned from cache.
+-test_me 1 -c 'map' -c 'map' -c 'map'
+-# First one is still cached from last time, discard should kill the cache, then
+-# one request should go through.
+-test_me 1 -c 'map' -c 'discard 0 1' -c 'map'
+-# Same as above, only this time the cache is killed before all the operations as
+-# well.  This is used from now on to clear the cache as it seems nicer and
+-# faster than running new nbdkit for each test.
+-test_me 2 -c 'discard 0 1' -c 'map' -c 'discard 0 1' -c 'map'
+-# Write should kill the cache as well.
+-test_me 2 -c 'discard 0 1' -c 'map' -c 'write 0 1' -c 'map'
+-# Alloc should use cached data from map
+-test_me 1 -c 'discard 0 1' -c 'map' -c 'alloc 0'
+-# Read should not kill the cache
+-test_me 1 -c 'discard 0 1' -c 'map' -c 'read 0 1' -c 'map' -c 'alloc 0'
+-- 
+2.47.1
+
