@@ -1,0 +1,47 @@
+From b49ef5b2fa3482272082fa3ef34c55c567b8d8c6 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 7 Jan 2026 20:25:56 +0000
+Subject: [PATCH] file: Don't advertise minimum_io_size > 64K (the max
+ supported by NBD)
+
+If you create an LVM thin pool with chunk size of 128K then the kernel
+will advertise /sys/block/dm-X/queue/minimum_io_size as 131072 (128K)
+and the file plugin will set the minimum block size to 128K as well.
+However the NBD protocol only supports a max of 64K, thus we get the
+following failure:
+
+  nbdkit: file[2]: error: plugin must set minimum block size between 1 and 64K
+
+This is not a hard limit and the kernel will split smaller requests,
+so the simplest solution is to round down larger sizes to 64K.
+
+Fixes: https://issues.redhat.com/browse/RHEL-139390
+Reported-by: Nijin Ashok
+Thanks: Eric Blake
+See: https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md#size-constraints
+(cherry picked from commit 42b72dc751030c1210bc2d50f6ff0c1c1a902afc)
+(cherry picked from commit 5db5982dc9b801fe37c0d4086724abc330656609)
+---
+ plugins/file/file.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/plugins/file/file.c b/plugins/file/file.c
+index 66d03d4f..ce84b7ca 100644
+--- a/plugins/file/file.c
++++ b/plugins/file/file.c
+@@ -728,6 +728,12 @@ file_open (int readonly)
+     if (ioctl (h->fd, BLKIOMIN, &minimum_io_size) == -1)
+       nbdkit_debug ("cannot get BLKIOMIN: %s: %m", h->name);
+ 
++    /* This is the maximum that NBD supports.  For Linux devices,
++     * minimum_io_size is only a hint and smaller operations work.
++     */
++    if (minimum_io_size > 65536)
++      minimum_io_size = 65536;
++
+     if (ioctl (h->fd, BLKIOOPT, &optimal_io_size) == -1)
+       nbdkit_debug ("cannot get BLKIOOPT: %s: %m", h->name);
+     else if (optimal_io_size == 0)
+-- 
+2.47.3
+

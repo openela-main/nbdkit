@@ -496,5 +496,5 @@ index 00000000..e2e10704
 +# Check that something got logged when the filter was unloaded.
 +grep "count bytes:" $log
 -- 
-2.47.1
+2.47.3
 

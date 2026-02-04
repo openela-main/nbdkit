@@ -55,7 +55,7 @@
 
 Name:           nbdkit
 Version:        1.44.1
-Release:        2%{?dist}
+Release:        4%{?dist}
 Summary:        NBD server
 
 License:        BSD-3-Clause
@@ -88,6 +88,9 @@ Patch0005:     0005-common-include-test-once.c-Further-fixes-for-pthread.patch
 Patch0006:     0006-Remove-deprecated-cacheextents-filter.patch
 Patch0007:     0007-New-filter-nbdkit-count-filter-count-bytes-read-writ.patch
 Patch0008:     0008-count-Clarify-documentation.patch
+Patch0009:     0009-vddk-Don-t-use-FNM_PATHNAME-when-matching-export-par.patch
+Patch0010:     0010-file-Don-t-advertise-minimum_io_size-64K-the-max-sup.patch
+Patch0011:     0011-file-Change-calculations-of-block-size-hints-for-blo.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -1558,6 +1561,14 @@ fi
 
 
 %changelog
+* Mon Jan 12 2026 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-4
+- Fix v2v conversion failure when minimum_io_size > 64K
+  resolves: RHEL-140707
+
+* Tue Jan 06 2026 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-3
+- vddk export parameter should allow loose wildcards without FNM_PATHNAME
+  resolves: RHEL-137303
+
 * Wed Jul 09 2025 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-2
 - Rebase to nbdkit 1.44.1
   resolves: RHEL-78830, RHEL-101180

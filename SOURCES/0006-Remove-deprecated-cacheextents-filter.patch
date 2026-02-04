@@ -688,5 +688,5 @@ index 34d66217..00000000
 -# Read should not kill the cache
 -test_me 1 -c 'discard 0 1' -c 'map' -c 'read 0 1' -c 'map' -c 'alloc 0'
 -- 
-2.47.1
+2.47.3
 
