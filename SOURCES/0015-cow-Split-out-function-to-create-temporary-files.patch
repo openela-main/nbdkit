@@ -1,0 +1,97 @@
+From 0fc4138b253d3803ea2239df2f268c005ee3b3f4 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 1 Apr 2026 16:03:21 +0100
+Subject: [PATCH] cow: Split out function to create temporary files
+
+Just code refactoring.
+
+(cherry picked from commit e8e409311b2c28b89da78b538196b9be018dd47d)
+---
+ filters/cow/blk.c | 45 ++++++++++++++++++++++++++++-----------------
+ 1 file changed, 28 insertions(+), 17 deletions(-)
+
+diff --git a/filters/cow/blk.c b/filters/cow/blk.c
+index 4957c871..96d613e2 100644
+--- a/filters/cow/blk.c
++++ b/filters/cow/blk.c
+@@ -164,27 +164,16 @@ struct blk_overlay {
+   uint64_t size;
+ };
+ 
+-struct blk_overlay *
+-blk_create (void)
++static int
++create_temporary_file (void)
+ {
+-  struct blk_overlay *blk;
+   int fd;
+   char *filename;
+ 
+-  blk = calloc (1, sizeof *blk);
+-  if (blk == NULL) {
+-    nbdkit_error ("calloc: %m");
+-    return NULL;
+-  }
+-
+-  blk->fds = (fd_vector)empty_vector;
+-
+-  /* We always create the first file, even if the disk size is 0. */
+   filename = strdup (template);
+   if (filename == NULL) {
+     nbdkit_error ("strdup: %m");
+-    free (blk);
+-    return NULL;
++    return -1;
+   }
+ 
+ #ifdef HAVE_MKOSTEMP
+@@ -198,21 +187,43 @@ blk_create (void)
+     fd = set_cloexec (fd);
+     if (fd < 0) {
+       int e = errno;
+-      unlink (template);
++      unlink (filename);
+       errno = e;
+     }
+   }
+ #endif
+   if (fd == -1) {
+     nbdkit_error ("mkostemp: %s: %m", template);
+-    free (blk);
+     free (filename);
+-    return NULL;
++    return -1;
+   }
+ 
+   unlink (filename);
+   free (filename);
+ 
++  return fd;
++}
++
++struct blk_overlay *
++blk_create (void)
++{
++  struct blk_overlay *blk;
++  int fd;
++
++  blk = calloc (1, sizeof *blk);
++  if (blk == NULL) {
++    nbdkit_error ("calloc: %m");
++    return NULL;
++  }
++
++  blk->fds = (fd_vector)empty_vector;
++
++  /* We always create the first file, even if the disk size is 0. */
++  fd = create_temporary_file ();
++  if (fd == -1) {
++    free (blk);
++    return NULL;
++  }
+   if (fd_vector_append (&blk->fds, fd) == -1) {
+     nbdkit_error ("realloc: %m");
+     close (fd);
+-- 
+2.47.3
+

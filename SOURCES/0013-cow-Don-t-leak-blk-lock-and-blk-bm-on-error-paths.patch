@@ -1,0 +1,40 @@
+From e60280f405be972d6ca585494825642817d37629 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 1 Apr 2026 15:30:15 +0100
+Subject: [PATCH] cow: Don't leak blk->lock and blk->bm on error paths
+
+Theoretically these were leaked on error paths, although in reality
+nbdkit immediately exits on failure here so there wasn't a real issue.
+Still it makes the code slightly cleaner.
+
+(cherry picked from commit 04d2b3e30e980f7da787d4cd2a4cde839be756fb)
+---
+ filters/cow/blk.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/filters/cow/blk.c b/filters/cow/blk.c
+index cc2f536b..c3173fdd 100644
+--- a/filters/cow/blk.c
++++ b/filters/cow/blk.c
+@@ -174,8 +174,6 @@ blk_create (void)
+   }
+ 
+   blk->fd = -1;
+-  pthread_mutex_init (&blk->lock, NULL);
+-  bitmap_init (&blk->bm, blksize, 2 /* bits per block */);
+ 
+   filename = strdup (template);
+   if (filename == NULL) {
+@@ -210,6 +208,9 @@ blk_create (void)
+   unlink (filename);
+   free (filename);
+ 
++  pthread_mutex_init (&blk->lock, NULL);
++  bitmap_init (&blk->bm, blksize, 2 /* bits per block */);
++
+   return blk;
+ }
+ 
+-- 
+2.47.3
+

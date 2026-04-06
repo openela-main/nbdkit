@@ -1,0 +1,56 @@
+From 34ee72b180f2a35e35df7d763881e7cfc205c665 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 1 Apr 2026 14:34:39 +0100
+Subject: [PATCH] cache, cow: Prefix ftruncate error with filter name
+
+We had a peculiar qemu error reported:
+
+  server reported: ftruncate: File too large
+
+It was unclear at first where this message came from.  (Originally it
+was thought to come from qemu).  Prefix the filter name on the error
+message to hopefully make this a little easier to debug in future.
+
+(cherry picked from commit 63416a8347f9865cc69e162a1c1e42015d394b24)
+---
+ filters/cache/blk.c | 2 +-
+ filters/cow/blk.c   | 3 +--
+ 2 files changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/filters/cache/blk.c b/filters/cache/blk.c
+index ba2c41b4..9a200dde 100644
+--- a/filters/cache/blk.c
++++ b/filters/cache/blk.c
+@@ -195,7 +195,7 @@ blk_set_size (uint64_t new_size)
+     return -1;
+ 
+   if (ftruncate (fd, ROUND_UP (size, blksize)) == -1) {
+-    nbdkit_error ("ftruncate: %m");
++    nbdkit_error ("cache: ftruncate: %m");
+     return -1;
+   }
+ 
+diff --git a/filters/cow/blk.c b/filters/cow/blk.c
+index ec51eea1..cc2f536b 100644
+--- a/filters/cow/blk.c
++++ b/filters/cow/blk.c
+@@ -225,7 +225,6 @@ blk_free (struct blk_overlay *blk)
+   }
+ }
+ 
+-
+ /* Allocate or resize the overlay file and bitmap. */
+ int
+ blk_set_size (struct blk_overlay *blk, uint64_t new_size)
+@@ -238,7 +237,7 @@ blk_set_size (struct blk_overlay *blk, uint64_t new_size)
+     return -1;
+ 
+   if (ftruncate (blk->fd, ROUND_UP (blk->size, blksize)) == -1) {
+-    nbdkit_error ("ftruncate: %m");
++    nbdkit_error ("cow: ftruncate: %m");
+     return -1;
+   }
+ 
+-- 
+2.47.3
+

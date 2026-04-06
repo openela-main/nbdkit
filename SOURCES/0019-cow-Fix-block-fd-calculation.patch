@@ -1,0 +1,30 @@
+From ed6aca2c0a58a8b96531f015cf4d629f5208348b Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 3 Apr 2026 14:06:31 +0100
+Subject: [PATCH] cow: Fix block -> fd calculation
+
+This calculation was plainly wrong, so the other overlay files were
+never used.
+
+Fixes: commit eb79a0e0c63ba1884bde02dc884a26aea2fc4324
+(cherry picked from commit 7180bbf0f3d7b29e7eccf30207980849f3586583)
+---
+ filters/cow/blk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/filters/cow/blk.c b/filters/cow/blk.c
+index afb48af9..3a416d55 100644
+--- a/filters/cow/blk.c
++++ b/filters/cow/blk.c
+@@ -324,7 +324,7 @@ blk_set_size (struct blk_overlay *blk, uint64_t new_size)
+ static int
+ get_fd_for_blknum (struct blk_overlay *blk, uint64_t blknum)
+ {
+-  size_t i = blknum / MAX_FILE_SIZE / blksize;
++  size_t i = blknum * blksize / MAX_FILE_SIZE;
+   assert (i < blk->fds.len);
+   return blk->fds.ptr[i];
+ }
+-- 
+2.47.3
+

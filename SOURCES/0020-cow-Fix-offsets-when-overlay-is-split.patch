@@ -1,0 +1,112 @@
+From 24d4313cddced9920a262e43e7dde70bb4aeae90 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 3 Apr 2026 13:50:37 +0100
+Subject: [PATCH] cow: Fix offsets when overlay is split
+
+Commit eb79a0e0c6 ("cow: Support overlays larger than 16T on ext4")
+splits the overlay into 8T chunks.  However we neglected to change the
+offset we are writing to with the result that it still tried to write
+beyond the end of files > 16T in size.  Fix the offsets so they are
+correct.
+
+This is not a data corruptor since this and the previous commit
+together were causing only the first overlay to be used with full
+offsets.  However it completely broke the intent of commit eb79a0e0c6.
+
+The test that was added only tests around the 8T mark, so does not hit
+this case even if TMPDIR is ext4.  Adjust the test also.
+
+The error seen is:
+  nbdkit: file.0: error: pwrite: File too large
+
+Reported-by: Ming Xie
+Fixes: commit eb79a0e0c63ba1884bde02dc884a26aea2fc4324
+(cherry picked from commit c495b7f46b60a8e549327b2444591fe9e3173da0)
+---
+ filters/cow/blk.c      | 18 ++++++++++++------
+ tests/test-cow-huge.sh |  4 ++--
+ 2 files changed, 14 insertions(+), 8 deletions(-)
+
+diff --git a/filters/cow/blk.c b/filters/cow/blk.c
+index 3a416d55..7a3f40c1 100644
+--- a/filters/cow/blk.c
++++ b/filters/cow/blk.c
+@@ -114,7 +114,8 @@ enum bm_entry {
+   BLOCK_TRIMMED = 3,
+ };
+ 
+-#define MAX_FILE_SIZE (UINT64_C (8) * 1024 * 1024 * 1024 * 1024) /* 8T */
++/* Maximum overlay file size, 8T.  This must be a power of 2. */
++#define MAX_FILE_SIZE (UINT64_C (8) * 1024 * 1024 * 1024 * 1024)
+ 
+ static const char *
+ state_to_string (enum bm_entry state)
+@@ -416,7 +417,8 @@ blk_read_multiple (struct blk_overlay *blk,
+                       "at offset %" PRIu64 " into the cache",
+                       runblocks, offset);
+ 
+-      if (full_pwrite (fd, block, blksize * runblocks, offset) == -1) {
++      if (full_pwrite (fd, block, blksize * runblocks,
++                       offset & (MAX_FILE_SIZE - 1)) == -1) {
+         *err = errno;
+         nbdkit_error ("cow: pwrite: %m");
+         return -1;
+@@ -426,7 +428,8 @@ blk_read_multiple (struct blk_overlay *blk,
+     }
+   }
+   else if (state == BLOCK_ALLOCATED) { /* Read overlay. */
+-    if (full_pread (fd, block, blksize * runblocks, offset) == -1) {
++    if (full_pread (fd, block, blksize * runblocks,
++                    offset & (MAX_FILE_SIZE - 1)) == -1) {
+       *err = errno;
+       nbdkit_error ("cow: pread: %m");
+       return -1;
+@@ -479,7 +482,8 @@ blk_cache (struct blk_overlay *blk,
+ 
+   if (state == BLOCK_ALLOCATED) {
+ #if HAVE_POSIX_FADVISE
+-    int r = posix_fadvise (fd, offset, blksize, POSIX_FADV_WILLNEED);
++    int r = posix_fadvise (fd, offset & (MAX_FILE_SIZE - 1),
++                           blksize, POSIX_FADV_WILLNEED);
+     if (r) {
+       errno = r;
+       nbdkit_error ("cow: posix_fadvise: %m");
+@@ -504,7 +508,8 @@ blk_cache (struct blk_overlay *blk,
+   memset (block + n, 0, tail);
+ 
+   if (mode == BLK_CACHE_COW) {
+-    if (full_pwrite (fd, block, blksize, offset) == -1) {
++    if (full_pwrite (fd, block, blksize,
++                     offset & (MAX_FILE_SIZE - 1)) == -1) {
+       *err = errno;
+       nbdkit_error ("cow: pwrite: %m");
+       return -1;
+@@ -525,7 +530,8 @@ blk_write (struct blk_overlay *blk,
+     nbdkit_debug ("cow: blk_write block %" PRIu64 " (offset %" PRIu64 ")",
+                   blknum, (uint64_t) offset);
+ 
+-  if (full_pwrite (fd, block, blksize, offset) == -1) {
++  if (full_pwrite (fd, block, blksize,
++                   offset & (MAX_FILE_SIZE - 1)) == -1) {
+     *err = errno;
+     nbdkit_error ("cow: pwrite: %m");
+     return -1;
+diff --git a/tests/test-cow-huge.sh b/tests/test-cow-huge.sh
+index cad1f6cc..b459b1b8 100755
+--- a/tests/test-cow-huge.sh
++++ b/tests/test-cow-huge.sh
+@@ -53,9 +53,9 @@ random.seed(None)
+ M = 1024*1024
+ T = 1024*1024*1024*1024
+ 
+-# Test a few megabytes either side of the 8T boundary.
++# Test a few megabytes either side of the 16T boundary.
+ overlay = bytearray(10 * M)
+-overlay_offset = int(8 * T - len(overlay)/2)
++overlay_offset = int(16 * T - len(overlay)/2)
+ assert h.get_size() > overlay_offset + len(overlay)
+ 
+ for iter in range(1, 200):
+-- 
+2.47.3
+

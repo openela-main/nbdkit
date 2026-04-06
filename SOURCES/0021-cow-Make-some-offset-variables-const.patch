@@ -1,0 +1,55 @@
+From aba2a885ab8dc8796fdc8f100cd35ad621bb307a Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 3 Apr 2026 14:10:51 +0100
+Subject: [PATCH] cow: Make some offset variables const
+
+These variables are not modified so set them to const.
+
+(cherry picked from commit 6ed71d8709cd03dd9a3c53cba9dd03e5b884031d)
+---
+ filters/cow/blk.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/filters/cow/blk.c b/filters/cow/blk.c
+index 7a3f40c1..4c1ee9d5 100644
+--- a/filters/cow/blk.c
++++ b/filters/cow/blk.c
+@@ -353,7 +353,7 @@ blk_read_multiple (struct blk_overlay *blk,
+                    uint64_t blknum, uint64_t nrblocks,
+                    uint8_t *block, bool cow_on_read, int *err)
+ {
+-  off_t offset = blknum * blksize;
++  const off_t offset = blknum * blksize;
+   enum bm_entry state;
+   uint64_t b, runblocks;
+   const int fd = get_fd_for_blknum (blk, blknum);
+@@ -466,7 +466,7 @@ blk_cache (struct blk_overlay *blk,
+ {
+   /* XXX Could make this lock more fine-grained with some thought. */
+   ACQUIRE_LOCK_FOR_CURRENT_SCOPE (&blk->lock);
+-  off_t offset = blknum * blksize;
++  const off_t offset = blknum * blksize;
+   enum bm_entry state = bitmap_get_blk (&blk->bm, blknum, BLOCK_NOT_ALLOCATED);
+   unsigned n = blksize, tail = 0;
+   const int fd = get_fd_for_blknum (blk, blknum);
+@@ -523,7 +523,7 @@ int
+ blk_write (struct blk_overlay *blk,
+            uint64_t blknum, const uint8_t *block, int *err)
+ {
+-  off_t offset = blknum * blksize;
++  const off_t offset = blknum * blksize;
+   const int fd = get_fd_for_blknum (blk, blknum);
+ 
+   if (cow_debug_verbose)
+@@ -547,7 +547,7 @@ int
+ blk_trim (struct blk_overlay *blk,
+           uint64_t blknum, int *err)
+ {
+-  off_t offset = blknum * blksize;
++  const off_t offset = blknum * blksize;
+ 
+   if (cow_debug_verbose)
+     nbdkit_debug ("cow: blk_trim block %" PRIu64 " (offset %" PRIu64 ")",
+-- 
+2.47.3
+

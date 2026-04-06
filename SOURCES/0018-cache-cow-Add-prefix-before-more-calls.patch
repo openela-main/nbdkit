@@ -1,0 +1,133 @@
+From 5261fbf8b7579bd6592fbfd51b6a99ce09a8b3c1 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Fri, 3 Apr 2026 13:41:36 +0100
+Subject: [PATCH] cache, cow: Add prefix before more calls
+
+Try to diagnose the origin of more error messages.
+
+Related: commit 63416a8347f9865cc69e162a1c1e42015d394b24
+(cherry picked from commit 25e1d1fdaedfd3c0cdce0600585f42478c93eda7)
+---
+ filters/cache/blk.c | 14 +++++++-------
+ filters/cow/blk.c   | 10 +++++-----
+ 2 files changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/filters/cache/blk.c b/filters/cache/blk.c
+index 9a200dde..02c33633 100644
+--- a/filters/cache/blk.c
++++ b/filters/cache/blk.c
+@@ -157,7 +157,7 @@ blk_init (void)
+    * least as large as the filesystem block size.
+    */
+   if (fstatvfs (fd, &statvfs) == -1) {
+-    nbdkit_error ("fstatvfs: %s: %m", tmpdir);
++    nbdkit_error ("cache: fstatvfs: %s: %m", tmpdir);
+     return -1;
+   }
+   blksize = MAX (min_block_size, statvfs.f_bsize);
+@@ -263,7 +263,7 @@ _blk_read_multiple (nbdkit_next *next,
+ 
+       if (full_pwrite (fd, block, blksize * runblocks, offset) == -1) {
+         *err = errno;
+-        nbdkit_error ("pwrite: %m");
++        nbdkit_error ("cache: pwrite: %m");
+         return -1;
+       }
+       for (b = 0; b < runblocks; ++b) {
+@@ -275,7 +275,7 @@ _blk_read_multiple (nbdkit_next *next,
+   else {                        /* Read cache. */
+     if (full_pread (fd, block, blksize * runblocks, offset) == -1) {
+       *err = errno;
+-      nbdkit_error ("pread: %m");
++      nbdkit_error ("cache: pread: %m");
+       return -1;
+     }
+     for (b = 0; b < runblocks; ++b)
+@@ -349,7 +349,7 @@ blk_cache (nbdkit_next *next,
+ 
+     if (full_pwrite (fd, block, blksize, offset) == -1) {
+       *err = errno;
+-      nbdkit_error ("pwrite: %m");
++      nbdkit_error ("cache: pwrite: %m");
+       return -1;
+     }
+     bitmap_set_blk (&bm, blknum, BLOCK_CLEAN);
+@@ -360,7 +360,7 @@ blk_cache (nbdkit_next *next,
+     int r = posix_fadvise (fd, offset, blksize, POSIX_FADV_WILLNEED);
+     if (r) {
+       errno = r;
+-      nbdkit_error ("posix_fadvise: %m");
++      nbdkit_error ("cache: posix_fadvise: %m");
+       return -1;
+     }
+ #endif
+@@ -390,7 +390,7 @@ blk_writethrough (nbdkit_next *next,
+ 
+   if (full_pwrite (fd, block, blksize, offset) == -1) {
+     *err = errno;
+-    nbdkit_error ("pwrite: %m");
++    nbdkit_error ("cache: pwrite: %m");
+     return -1;
+   }
+ 
+@@ -424,7 +424,7 @@ blk_write (nbdkit_next *next,
+ 
+   if (full_pwrite (fd, block, blksize, offset) == -1) {
+     *err = errno;
+-    nbdkit_error ("pwrite: %m");
++    nbdkit_error ("cache: pwrite: %m");
+     return -1;
+   }
+   bitmap_set_blk (&bm, blknum, BLOCK_DIRTY);
+diff --git a/filters/cow/blk.c b/filters/cow/blk.c
+index defd0d94..afb48af9 100644
+--- a/filters/cow/blk.c
++++ b/filters/cow/blk.c
+@@ -418,7 +418,7 @@ blk_read_multiple (struct blk_overlay *blk,
+ 
+       if (full_pwrite (fd, block, blksize * runblocks, offset) == -1) {
+         *err = errno;
+-        nbdkit_error ("pwrite: %m");
++        nbdkit_error ("cow: pwrite: %m");
+         return -1;
+       }
+       for (b = 0; b < runblocks; ++b)
+@@ -428,7 +428,7 @@ blk_read_multiple (struct blk_overlay *blk,
+   else if (state == BLOCK_ALLOCATED) { /* Read overlay. */
+     if (full_pread (fd, block, blksize * runblocks, offset) == -1) {
+       *err = errno;
+-      nbdkit_error ("pread: %m");
++      nbdkit_error ("cow: pread: %m");
+       return -1;
+     }
+   }
+@@ -482,7 +482,7 @@ blk_cache (struct blk_overlay *blk,
+     int r = posix_fadvise (fd, offset, blksize, POSIX_FADV_WILLNEED);
+     if (r) {
+       errno = r;
+-      nbdkit_error ("posix_fadvise: %m");
++      nbdkit_error ("cow: posix_fadvise: %m");
+       return -1;
+     }
+ #endif
+@@ -506,7 +506,7 @@ blk_cache (struct blk_overlay *blk,
+   if (mode == BLK_CACHE_COW) {
+     if (full_pwrite (fd, block, blksize, offset) == -1) {
+       *err = errno;
+-      nbdkit_error ("pwrite: %m");
++      nbdkit_error ("cow: pwrite: %m");
+       return -1;
+     }
+     bitmap_set_blk (&blk->bm, blknum, BLOCK_ALLOCATED);
+@@ -527,7 +527,7 @@ blk_write (struct blk_overlay *blk,
+ 
+   if (full_pwrite (fd, block, blksize, offset) == -1) {
+     *err = errno;
+-    nbdkit_error ("pwrite: %m");
++    nbdkit_error ("cow: pwrite: %m");
+     return -1;
+   }
+ 
+-- 
+2.47.3
+

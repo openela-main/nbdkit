@@ -55,7 +55,7 @@
 
 Name:           nbdkit
 Version:        1.44.1
-Release:        4%{?dist}
+Release:        6%{?dist}
 Summary:        NBD server
 
 License:        BSD-3-Clause
@@ -91,6 +91,16 @@ Patch0008:     0008-count-Clarify-documentation.patch
 Patch0009:     0009-vddk-Don-t-use-FNM_PATHNAME-when-matching-export-par.patch
 Patch0010:     0010-file-Don-t-advertise-minimum_io_size-64K-the-max-sup.patch
 Patch0011:     0011-file-Change-calculations-of-block-size-hints-for-blo.patch
+Patch0012:     0012-cache-cow-Prefix-ftruncate-error-with-filter-name.patch
+Patch0013:     0013-cow-Don-t-leak-blk-lock-and-blk-bm-on-error-paths.patch
+Patch0014:     0014-cow-Use-a-vector-to-store-the-overlay-file-descripto.patch
+Patch0015:     0015-cow-Split-out-function-to-create-temporary-files.patch
+Patch0016:     0016-cow-Add-name-of-the-temporary-file-to-debug-output.patch
+Patch0017:     0017-cow-Support-overlays-larger-than-16T-on-ext4.patch
+Patch0018:     0018-cache-cow-Add-prefix-before-more-calls.patch
+Patch0019:     0019-cow-Fix-block-fd-calculation.patch
+Patch0020:     0020-cow-Fix-offsets-when-overlay-is-split.patch
+Patch0021:     0021-cow-Make-some-offset-variables-const.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -1561,6 +1571,10 @@ fi
 
 
 %changelog
+* Fri Apr 03 2026 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-6
+- cow: Support overlays larger than 16T on ext4 + further fixes
+  resolves: RHEL-164552
+
 * Mon Jan 12 2026 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-4
 - Fix v2v conversion failure when minimum_io_size > 64K
   resolves: RHEL-140707
