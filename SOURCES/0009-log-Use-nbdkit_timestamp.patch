@@ -1,0 +1,45 @@
+From f1c763c8e15e23be656836e4b8ed740434776c3e Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 29 Jan 2026 11:14:49 +0000
+Subject: [PATCH] log: Use nbdkit_timestamp()
+
+After adding the new public nbdkit_timestamp function we can replace
+the open-coded timestamp generation in the log filter.  Note the
+format is identical (since the nbdkit_timestamp code was copied from
+here).
+
+(cherry picked from commit 2942d8381dcbe573093e819360b5b1d5d38b80b7)
+---
+ filters/log/output.c | 16 +---------------
+ 1 file changed, 1 insertion(+), 15 deletions(-)
+
+diff --git a/filters/log/output.c b/filters/log/output.c
+index 4a116046..72a0ba3c 100644
+--- a/filters/log/output.c
++++ b/filters/log/output.c
+@@ -60,21 +60,7 @@ static void
+ to_file (struct handle *h, log_id_t id, const char *act, enum type type,
+          const char *fmt, va_list args)
+ {
+-  struct timeval tv;
+-  struct tm tm;
+-  char timestamp[27] = "Time unknown";
+-
+-  /* Logging is best effort, so ignore failure to get timestamp */
+-  if (!gettimeofday (&tv, NULL)) {
+-    size_t s;
+-
+-    gmtime_r (&tv.tv_sec, &tm);
+-    s = strftime (timestamp, sizeof timestamp - sizeof ".000000" + 1,
+-                  "%F %T", &tm);
+-    assert (s);
+-    snprintf (timestamp + s, sizeof timestamp - s, ".%06ld",
+-              0L + tv.tv_usec);
+-  }
++  const char *timestamp = nbdkit_timestamp ();
+ 
+ #ifdef HAVE_FLOCKFILE
+   flockfile (logfile);
+-- 
+2.47.3
+

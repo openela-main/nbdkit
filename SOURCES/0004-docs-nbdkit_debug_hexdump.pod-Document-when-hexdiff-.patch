@@ -1,0 +1,33 @@
+From ad67a7bbd2b596291c696e9718d68800f9a02734 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 30 Dec 2025 21:59:24 +0000
+Subject: [PATCH] docs/nbdkit_debug_hexdump.pod: Document when hexdiff was
+ added to nbdkit
+
+Not until the next stable branch, so 1.48.
+
+Fixes: commit 753d8d468240e613f3d905282446011c31548e34
+
+Cherry picked from commit 7e9ec310d4149449229a8ddbb50395a3bdbd7227.
+For RHEL 10.2, add a note that it was backported.
+---
+ docs/nbdkit_debug_hexdump.pod | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/docs/nbdkit_debug_hexdump.pod b/docs/nbdkit_debug_hexdump.pod
+index 274380bf..4c4cae19 100644
+--- a/docs/nbdkit_debug_hexdump.pod
++++ b/docs/nbdkit_debug_hexdump.pod
+@@ -53,6 +53,9 @@ buffer in the second row (prefixed with C<+>):
+ 
+ C<nbdkit_debug_hexdump> was added in nbdkit 1.46.
+ 
++C<nbdkit_debug_hexdiff> was added in nbdkit 1.48
++(and backported to RHEL 10.2).
++
+ =head1 SEE ALSO
+ 
+ L<nbdkit(1)>,
+-- 
+2.47.3
+

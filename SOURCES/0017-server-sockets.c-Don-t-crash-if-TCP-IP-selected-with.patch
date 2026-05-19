@@ -1,0 +1,51 @@
+From 53f021813744745f0ec0996f4e16bc71d3484336 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 1 Feb 2026 13:40:01 +0000
+Subject: [PATCH] server/sockets.c: Don't crash if TCP/IP selected without
+ --port
+
+Because of a thinko in commit 8251486ec7 ("server: Partially fix
+--port=0") I neglected the case where we select TCP/IP but don't use
+the --port parameter (thus port == NULL), eg:
+
+  $ nbdkit file disk.img
+  Segmentation fault         (core dumped) nbdkit file disk.img
+
+Ooops.  The fix is to use ioport which is never NULL in this function.
+
+Our tests don't test this case, since we cannot in general open port
+10809 safely from the test suite.
+
+Fixes: commit 8251486ec7d899628de246bc3232ddb20dceaa53
+(cherry picked from commit 490c1a6980de65bb21f007dddb4a5a7ffa136c66)
+---
+ server/sockets.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/server/sockets.c b/server/sockets.c
+index dad7fb3c..473f8ee6 100644
+--- a/server/sockets.c
++++ b/server/sockets.c
+@@ -327,8 +327,8 @@ bind_tcpip_socket (sockets *socks)
+     }
+   }
+ 
+-  /* If port == "0" then we let the kernel choose the port number.
+-   * (In the normal dual-stack case, it will actually choose two port
++  /* If --port=0 then we let the kernel choose the port number.  (In
++   * the normal dual-stack case, it will actually choose two port
+    * numbers, one for IPv4 and one for IPv6).  In this case we can
+    * overwrite the port variable with the chosen port number,
+    * preferring IPv6.
+@@ -336,7 +336,7 @@ bind_tcpip_socket (sockets *socks)
+    * In theory this loop could be combined with the one above but it
+    * makes the code very intricate.
+    */
+-  if (strcmp (port, "0") == 0) {
++  if (strcmp (ipport, "0") == 0) {
+     static char port_str[16] = { 0 };
+     size_t i;
+     struct sockaddr_storage ss;
+-- 
+2.47.3
+

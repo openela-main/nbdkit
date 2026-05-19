@@ -1,4 +1,4 @@
-From 24d4313cddced9920a262e43e7dde70bb4aeae90 Mon Sep 17 00:00:00 2001
+From 305ec1211a8a594f6cb87154ae48edc0c8fb7ece Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Fri, 3 Apr 2026 13:50:37 +0100
 Subject: [PATCH] cow: Fix offsets when overlay is split

@@ -1,0 +1,78 @@
+From 71158f3d0091027caf8a08b0cbe825e7875e4700 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 8 Feb 2026 21:53:17 +0000
+Subject: [PATCH] vram: Cast cl_ulong to uint64_t before printing
+
+On i686, the code did not compile:
+
+vram.c: In function 'vram_dump_plugin':
+vram.c:301:37: error: format '%lu' expects argument of type 'long unsigned int', but argument 2 has type 'cl_ulong' {aka 'long long unsigned int'} [-Werror=format=]
+  301 |     printf ("vram_device_mem_size=%lu\n", all_devices.ptr[i].global_mem_size);
+      |                                   ~~^     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                     |                       |
+      |                                     long unsigned int       cl_ulong {aka long long unsigned int}
+      |                                   %llu
+vram.c:302:50: error: format '%lu' expects argument of type 'long unsigned int', but argument 2 has type 'cl_ulong' {aka 'long long unsigned int'} [-Werror=format=]
+  302 |     printf ("vram_device_max_memory_allocation=%lu\n",
+      |                                                ~~^
+      |                                                  |
+      |                                                  long unsigned int
+      |                                                %llu
+  303 |             all_devices.ptr[i].max_mem_alloc_size);
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                               |
+      |                               cl_ulong {aka long long unsigned int}
+vram.c: In function 'vram_config_complete':
+vram.c:364:52: error: format '%lu' expects argument of type 'long unsigned int', but argument 3 has type 'cl_ulong' {aka 'long long unsigned int'} [-Werror=format=]
+  364 |       nbdkit_error ("OpenCL device '%s' has size %lu which is smaller than "
+      |                                                  ~~^
+      |                                                    |
+      |                                                    long unsigned int
+      |                                                  %llu
+......
+  367 |                     device.name, device.global_mem_size);
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~
+      |                                        |
+      |                                        cl_ulong {aka long long unsigned int}
+cc1: all warnings being treated as errors
+
+(cherry picked from commit 47c5cceeb262273c6c25c3b7f979ea90f1371e0b)
+---
+ plugins/vram/vram.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/plugins/vram/vram.c b/plugins/vram/vram.c
+index fe8bf60e..0ed1e841 100644
+--- a/plugins/vram/vram.c
++++ b/plugins/vram/vram.c
+@@ -298,9 +298,10 @@ vram_dump_plugin (void)
+     printf ("vram_device_vendor=%s\n", all_devices.ptr[i].vendor);
+     printf ("vram_device_available=%s\n",
+             all_devices.ptr[i].available ? "yes" : "no");
+-    printf ("vram_device_mem_size=%lu\n", all_devices.ptr[i].global_mem_size);
+-    printf ("vram_device_max_memory_allocation=%lu\n",
+-            all_devices.ptr[i].max_mem_alloc_size);
++    printf ("vram_device_mem_size=%" PRIu64 "\n",
++            (uint64_t) all_devices.ptr[i].global_mem_size);
++    printf ("vram_device_max_memory_allocation=%" PRIu64 "\n",
++            (uint64_t) all_devices.ptr[i].max_mem_alloc_size);
+     printf ("vram_device_queue_on_device_max_size=%u\n",
+             all_devices.ptr[i].queue_on_device_max_size);
+     printf ("vram_device_queue_on_device_preferred_size=%u\n",
+@@ -361,10 +362,11 @@ vram_config_complete (void)
+   /* Pick the size. */
+   if (size >= 0) {              /* size appeared on the command line */
+     if (size > device.global_mem_size) {
+-      nbdkit_error ("OpenCL device '%s' has size %lu which is smaller than "
++      nbdkit_error ("OpenCL device '%s' has size %" PRIu64" "
++                    "which is smaller than "
+                     "the size given on the command line. To allocate the "
+                     "maximum size, omit the size parameter.",
+-                    device.name, device.global_mem_size);
++                    device.name, (uint64_t) device.global_mem_size);
+       return -1;
+     }
+   }
+-- 
+2.47.3
+

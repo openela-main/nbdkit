@@ -1,0 +1,60 @@
+From 26dd53f15d522ae137ec92afa2f49fd010ff2c15 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 1 Feb 2026 21:09:04 +0000
+Subject: [PATCH] tests/test-sparse-random-blocksize.sh: Enhance the test
+
+Check that all extents are aligned to the block size, and randomly
+select the block size so we are testing both small and large blocks.
+
+Updates: commit 5612598a49aaf4ac49f1b3e096dc4945ea7df640
+(cherry picked from commit e11011043556b6ee4333212264bdefa5324eedc4)
+---
+ tests/test-sparse-random-blocksize.sh | 28 +++++++++++++++++++++++++--
+ 1 file changed, 26 insertions(+), 2 deletions(-)
+
+diff --git a/tests/test-sparse-random-blocksize.sh b/tests/test-sparse-random-blocksize.sh
+index c1230809..3ddc1f26 100755
+--- a/tests/test-sparse-random-blocksize.sh
++++ b/tests/test-sparse-random-blocksize.sh
+@@ -38,12 +38,36 @@ set -x
+ set -u
+ 
+ requires_run
++requires_nbdinfo
+ 
+ # nbdcopy >= 1.5.9 required for this test.
+ requires_nbdcopy
+ requires_libnbd_version 1.5.9
+ 
++out=sparse-random-blocksize.out
++cleanup_fn rm -f $out
++rm -f $out
++
++#blocksize=65536
++blocksize_r="$(( 10 + (RANDOM % 19) ))"  ;# 10..28
++blocksize="$(( 1 << blocksize_r ))"
++
++export out
+ nbdkit -v \
+        sparse-random \
+-       size=10G blocksize=64K \
+-       --run 'nbdcopy "$uri" "$uri"'
++       size=10G blocksize=$blocksize \
++       --run '
++    nbdinfo --map "$uri" > $out &&
++    nbdcopy "$uri" "$uri"
++'
++
++# Check all the extents are aligned to $blocksize
++cat $out
++( while read offset size rest ; do
++      echo checking $offset $size ...
++      if test "$(( $offset % blocksize ))" != 0 ||
++         test "$(( $size % blocksize ))" != 0 ; then
++          echo error: extent is not aligned to $blocksize: offset $offset size $size
++          exit 1
++      fi
++done ) <$out
+-- 
+2.47.3
+

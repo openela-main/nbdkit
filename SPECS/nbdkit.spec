@@ -51,11 +51,11 @@
 %global verify_tarball_signature 1
 
 # The source directory.
-%global source_directory 1.44-stable
+%global source_directory 1.46-stable
 
 Name:           nbdkit
-Version:        1.44.1
-Release:        6%{?dist}
+Version:        1.46.2
+Release:        3%{?dist}
 Summary:        NBD server
 
 License:        BSD-3-Clause
@@ -77,30 +77,40 @@ Source2:        libguestfs.keyring
 Source3:        copy-patches.sh
 
 # Patches come from the upstream repository:
-# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-10.1/
+# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-10.2/
 
 # Patches.
-Patch0001:     0001-common-Add-ONCE-macro-to-run-code-only-once.patch
-Patch0002:     0002-file-zero-Print-the-debug-message-on-the-fallback-pa.patch
-Patch0003:     0003-file-trim-Don-t-try-BLKDISCARD-if-earlier-FALLOC_FL_.patch
-Patch0004:     0004-common-include-test-once.c-Skip-test-on-macOS-which-.patch
-Patch0005:     0005-common-include-test-once.c-Further-fixes-for-pthread.patch
-Patch0006:     0006-Remove-deprecated-cacheextents-filter.patch
-Patch0007:     0007-New-filter-nbdkit-count-filter-count-bytes-read-writ.patch
-Patch0008:     0008-count-Clarify-documentation.patch
-Patch0009:     0009-vddk-Don-t-use-FNM_PATHNAME-when-matching-export-par.patch
-Patch0010:     0010-file-Don-t-advertise-minimum_io_size-64K-the-max-sup.patch
-Patch0011:     0011-file-Change-calculations-of-block-size-hints-for-blo.patch
-Patch0012:     0012-cache-cow-Prefix-ftruncate-error-with-filter-name.patch
-Patch0013:     0013-cow-Don-t-leak-blk-lock-and-blk-bm-on-error-paths.patch
-Patch0014:     0014-cow-Use-a-vector-to-store-the-overlay-file-descripto.patch
-Patch0015:     0015-cow-Split-out-function-to-create-temporary-files.patch
-Patch0016:     0016-cow-Add-name-of-the-temporary-file-to-debug-output.patch
-Patch0017:     0017-cow-Support-overlays-larger-than-16T-on-ext4.patch
-Patch0018:     0018-cache-cow-Add-prefix-before-more-calls.patch
-Patch0019:     0019-cow-Fix-block-fd-calculation.patch
-Patch0020:     0020-cow-Fix-offsets-when-overlay-is-split.patch
-Patch0021:     0021-cow-Make-some-offset-variables-const.patch
+Patch0001:     0001-vram-Cast-cl_ulong-to-uint64_t-before-printing.patch
+Patch0002:     0002-server-Add-nbdkit_debug_hexdiff-function.patch
+Patch0003:     0003-checkwrite-Display-differences-if-D-checkwrite.showd.patch
+Patch0004:     0004-docs-nbdkit_debug_hexdump.pod-Document-when-hexdiff-.patch
+Patch0005:     0005-docs-nbdkit_debug_hexdump.pod-Add-a-link-back-to-nbd.patch
+Patch0006:     0006-Add-new-nbdkit_name-function.patch
+Patch0007:     0007-server-test-public.c-Add-process_name-dummy-variable.patch
+Patch0008:     0008-Add-new-nbdkit_timestamp-function.patch
+Patch0009:     0009-log-Use-nbdkit_timestamp.patch
+Patch0010:     0010-docs-nbdkit-plugin.pod-Add-a-link-to-nbdkit_timestam.patch
+Patch0011:     0011-docs-nbdkit_timestamp.pod-Fix-copy-and-paste-error-i.patch
+Patch0012:     0012-todo-Add-item-about-nbdkit_timestamp-on-the-main-thr.patch
+Patch0013:     0013-server-sockets.c-Print-the-actual-bound-addresses-an.patch
+Patch0014:     0014-server-Partially-fix-port-0.patch
+Patch0015:     0015-tests-test-ip-filter.sh-Remove-use-of-pick_unused_po.patch
+Patch0016:     0016-tests-test-ipv4-lo.sh-tests-test-ipv6-lo.sh-Remove-p.patch
+Patch0017:     0017-server-sockets.c-Don-t-crash-if-TCP-IP-selected-with.patch
+Patch0018:     0018-sparse-random-Make-block-size-configurable.patch
+Patch0019:     0019-sparse-random-Clamp-preferred-block-size.patch
+Patch0020:     0020-tests-test-sparse-random-blocksize.sh-Enhance-the-te.patch
+Patch0021:     0021-tests-test-sparse-random-blocksize.sh-Reduce-maximum.patch
+Patch0022:     0022-cache-cow-Prefix-ftruncate-error-with-filter-name.patch
+Patch0023:     0023-cow-Don-t-leak-blk-lock-and-blk-bm-on-error-paths.patch
+Patch0024:     0024-cow-Use-a-vector-to-store-the-overlay-file-descripto.patch
+Patch0025:     0025-cow-Split-out-function-to-create-temporary-files.patch
+Patch0026:     0026-cow-Add-name-of-the-temporary-file-to-debug-output.patch
+Patch0027:     0027-cow-Support-overlays-larger-than-16T-on-ext4.patch
+Patch0028:     0028-cache-cow-Add-prefix-before-more-calls.patch
+Patch0029:     0029-cow-Fix-block-fd-calculation.patch
+Patch0030:     0030-cow-Fix-offsets-when-overlay-is-split.patch
+Patch0031:     0031-cow-Make-some-offset-variables-const.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -152,7 +162,13 @@ BuildRequires:  pkgconfig(libtorrent-rasterbar)
 %if 0%{?have_blkio}
 BuildRequires:  pkgconfig(blkio)
 %endif
+%if !0%{?rhel}
+BuildRequires:  pkgconfig(OpenCL)
+%endif
 BuildRequires:  bash-completion
+%if 0%{?fedora} || 0%{?rhel} >= 11
+BuildRequires:  bash-completion-devel
+%endif
 BuildRequires:  perl-devel
 BuildRequires:  perl(ExtUtils::Embed)
 %if 0%{?rhel} == 8
@@ -170,11 +186,6 @@ BuildRequires:  ocaml-ocamldoc
 %endif
 BuildRequires:  pkgconfig(tcl)
 BuildRequires:  pkgconfig(lua)
-%endif
-# Only needed until the following bug gets fixed in boost:
-# https://bugzilla.redhat.com/show_bug.cgi?id=2297642
-%if 0%{?fedora} >= 41
-BuildRequires:  openssl-devel-engine
 %endif
 %if 0%{verify_tarball_signature}
 BuildRequires:  gnupg2
@@ -195,9 +206,11 @@ BuildRequires:  /usr/bin/lzip
 BuildRequires:  /usr/bin/nbdcopy
 BuildRequires:  /usr/bin/nbdinfo
 BuildRequires:  /usr/bin/nbdsh
+%ifnarch %{ix86}
 BuildRequires:  /usr/bin/qemu-img
 BuildRequires:  /usr/bin/qemu-io
 BuildRequires:  /usr/bin/qemu-nbd
+%endif
 BuildRequires:  /usr/sbin/sfdisk
 %if !0%{?rhel}
 BuildRequires:  /usr/bin/socat
@@ -602,11 +615,20 @@ VMware VDDK for accessing VMware disks and servers.
 %endif
 
 
+%if !0%{?rhel}
+%package vram-plugin
+Summary:        use GPU Video RAM as a network block device
+Requires:       %{name}-server%{?_isa} = %{version}-%{release}
+Recommends:     %{_bindir}/clinfo
+
+%description vram-plugin
+This package contains GPU Video RAM support for %{name}.
+%endif
+
+
 %package basic-filters
 Summary:        Basic filters for %{name}
 Requires:       %{name}-server%{?_isa} = %{version}-%{release}
-# Remove this in Fedora 43:
-Obsoletes:      nbdkit-gzip-filter < %{version}-%{release}
 
 %description basic-filters
 This package contains filters for %{name} which only depend on simple
@@ -645,6 +667,8 @@ nbdkit-fua-filter          Modify flush behaviour in plugins.
 
 nbdkit-gzip-filter         Decompress a .gz file
 
+nbdkit-indexed-gzip-filter Access .gz contents efficiently.
+
 nbdkit-ip-filter           Filter clients by IP address.
 
 nbdkit-limit-filter        Limit nr clients that can connect concurrently.
@@ -652,6 +676,8 @@ nbdkit-limit-filter        Limit nr clients that can connect concurrently.
 nbdkit-log-filter          Log all transactions to a file.
 
 nbdkit-luks-filter         Read and write LUKS-encrypted disks.
+
+nbdkit-map-filter          Remap disk blocks.
 
 nbdkit-multi-conn-filter   Enable, emulate or disable multi-conn.
 
@@ -880,6 +906,7 @@ export PYTHON=%{__python3}
     --enable-perl \
     --enable-tcl \
     --enable-torrent \
+    --enable-vram \
     --with-ext2 \
     --with-iso \
     --with-libvirt \
@@ -888,6 +915,7 @@ export PYTHON=%{__python3}
     --disable-perl \
     --disable-tcl \
     --disable-torrent \
+    --disable-vram \
     --without-ext2 \
     --without-iso \
     --without-libvirt \
@@ -952,6 +980,7 @@ popd
     --disable-torrent \
     --disable-valgrind \
     --disable-vddk \
+    --disable-vram \
     --without-bash-completions \
     --without-curl \
     --without-ext2 \
@@ -1361,6 +1390,15 @@ fi
 %endif
 
 
+%if !0%{?rhel}
+%files vram-plugin
+%doc README.md
+%license LICENSE
+%{_libdir}/%{name}/plugins/nbdkit-vram-plugin.so
+%{_mandir}/man1/nbdkit-vram-plugin.1*
+%endif
+
+
 %files basic-filters
 %doc README.md
 %license LICENSE
@@ -1380,10 +1418,12 @@ fi
 %{_libdir}/%{name}/filters/nbdkit-extentlist-filter.so
 %{_libdir}/%{name}/filters/nbdkit-fua-filter.so
 %{_libdir}/%{name}/filters/nbdkit-gzip-filter.so
+%{_libdir}/%{name}/filters/nbdkit-indexed-gzip-filter.so
 %{_libdir}/%{name}/filters/nbdkit-ip-filter.so
 %{_libdir}/%{name}/filters/nbdkit-limit-filter.so
 %{_libdir}/%{name}/filters/nbdkit-log-filter.so
 %{_libdir}/%{name}/filters/nbdkit-luks-filter.so
+%{_libdir}/%{name}/filters/nbdkit-map-filter.so
 %{_libdir}/%{name}/filters/nbdkit-multi-conn-filter.so
 %{_libdir}/%{name}/filters/nbdkit-nocache-filter.so
 %{_libdir}/%{name}/filters/nbdkit-noextents-filter.so
@@ -1426,10 +1466,12 @@ fi
 %{_mandir}/man1/nbdkit-extentlist-filter.1*
 %{_mandir}/man1/nbdkit-fua-filter.1*
 %{_mandir}/man1/nbdkit-gzip-filter.1*
+%{_mandir}/man1/nbdkit-indexed-gzip-filter.1*
 %{_mandir}/man1/nbdkit-ip-filter.1*
 %{_mandir}/man1/nbdkit-limit-filter.1*
 %{_mandir}/man1/nbdkit-log-filter.1*
 %{_mandir}/man1/nbdkit-luks-filter.1*
+%{_mandir}/man1/nbdkit-map-filter.1*
 %{_mandir}/man1/nbdkit-multi-conn-filter.1*
 %{_mandir}/man1/nbdkit-nocache-filter.1*
 %{_mandir}/man1/nbdkit-noextents-filter.1*
@@ -1498,7 +1540,7 @@ fi
 
 
 %files devel
-%doc BENCHMARKING OTHER_PLUGINS README.md SECURITY TODO
+%doc BENCHMARKING OTHER_PLUGINS README.md SECURITY.md TODO.md
 %license LICENSE
 # Include the source of the example plugins in the documentation.
 %doc plugins/example*/*.c
@@ -1538,8 +1580,13 @@ fi
 
 %files bash-completion
 %license LICENSE
+%if 0%{?fedora} || 0%{?rhel} >= 11
+%dir %{bash_completions_dir}
+%{bash_completions_dir}/nbdkit
+%else
 %dir %{_datadir}/bash-completion/completions
 %{_datadir}/bash-completion/completions/nbdkit
+%endif
 
 
 %if 0%{?with_selinux}
@@ -1571,17 +1618,23 @@ fi
 
 
 %changelog
-* Fri Apr 03 2026 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-6
+* Fri Apr 03 2026 Richard W.M. Jones <rjones@redhat.com> - 1.46.2-3
 - cow: Support overlays larger than 16T on ext4 + further fixes
-  resolves: RHEL-164552
+  resolves: RHEL-164229
 
-* Mon Jan 12 2026 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-4
+* Mon Feb 09 2026 Richard W.M. Jones <rjones@redhat.com> - 1.46.2-1
+- Rebase to nbdkit 1.46.2
+- Backport nbdkit_debug_hexdiff, nbdkit_name, nbdkit_timestamp
+  from nbdkit 1.47.
+  resolves: RHEL-111242
+- Synchronize spec file with Fedora.
+- vddk: Don't use FNM_PATHNAME when matching export parameter
+  resolves: RHEL-122755
+- Fix assertion failure in blocksize-policy filter
 - Fix v2v conversion failure when minimum_io_size > 64K
-  resolves: RHEL-140707
-
-* Tue Jan 06 2026 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-3
-- vddk export parameter should allow loose wildcards without FNM_PATHNAME
-  resolves: RHEL-137303
+  resolves: RHEL-139390
+- Test and document that VDDK 9.0.1.0 works
+  resolves: RHEL-140615
 
 * Wed Jul 09 2025 Richard W.M. Jones <rjones@redhat.com> - 1.44.1-2
 - Rebase to nbdkit 1.44.1

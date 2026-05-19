@@ -1,0 +1,29 @@
+From 69e58c8e3f98c845cc13884d3ce4b6e768d2afb7 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 29 Jan 2026 15:18:12 +0000
+Subject: [PATCH] docs/nbdkit-plugin.pod: Add a link to nbdkit_timestamp(3)
+
+The plugin page should link to every API page, and I forgot to add a
+new link to nbdkit_timestamp(3).
+
+Fixes: commit 773d958c8f2a5043053d385b8bfe287c43ee63d4
+(cherry picked from commit a1a659645fa39cdba0996cb57673033be1a17385)
+---
+ docs/nbdkit-plugin.pod | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/docs/nbdkit-plugin.pod b/docs/nbdkit-plugin.pod
+index 41f65908..3a5dc4a7 100644
+--- a/docs/nbdkit-plugin.pod
++++ b/docs/nbdkit-plugin.pod
+@@ -1661,6 +1661,7 @@ L<nbdkit_shutdown(3)>,
+ L<nbdkit_stdio_safe(3)>,
+ L<nbdkit_strdup_intern(3)>,
+ L<nbdkit_strndup_intern(3)>,
++L<nbdkit_timestamp(3)>,
+ L<nbdkit_vdebug(3)>,
+ L<nbdkit_verror(3)>,
+ L<nbdkit_vprintf_intern(3)>.
+-- 
+2.47.3
+

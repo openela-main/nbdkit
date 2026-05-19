@@ -1,0 +1,416 @@
+From d48364b33bea7997c38461ba2d85015a8901f2f3 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 1 Feb 2026 19:01:54 +0000
+Subject: [PATCH] sparse-random: Make block size configurable
+
+For trying to reproduce a virt-v2v corruption case, we would like to
+use this plugin to simulate quite closely a VDDK source.  VDDK uses a
+64K block size for extents, which is different from the default (4K)
+for this plugin.  This change allows us to use 'blocksize=64K' to
+simulate this.
+
+(cherry picked from commit 5612598a49aaf4ac49f1b3e096dc4945ea7df640)
+---
+ .../nbdkit-sparse-random-plugin.pod           | 11 ++-
+ plugins/sparse-random/sparse-random.c         | 99 +++++++++++--------
+ tests/Makefile.am                             |  2 +
+ tests/test-sparse-random-blocksize.sh         | 49 +++++++++
+ 4 files changed, 117 insertions(+), 44 deletions(-)
+ create mode 100755 tests/test-sparse-random-blocksize.sh
+
+diff --git a/plugins/sparse-random/nbdkit-sparse-random-plugin.pod b/plugins/sparse-random/nbdkit-sparse-random-plugin.pod
+index 0d64633f..d0472e00 100644
+--- a/plugins/sparse-random/nbdkit-sparse-random-plugin.pod
++++ b/plugins/sparse-random/nbdkit-sparse-random-plugin.pod
+@@ -4,8 +4,8 @@ nbdkit-sparse-random-plugin - make sparse random disks
+ 
+ =head1 SYNOPSIS
+ 
+- nbdkit sparse-random [size=]SIZE [seed=SEED]
+-                      [percent=N] [runlength=N]
++ nbdkit sparse-random [size=]SIZE [blocksize=N]
++                      [seed=SEED] [percent=N] [runlength=N]
+                       [random-content=true]
+ 
+ =head1 DESCRIPTION
+@@ -52,6 +52,13 @@ See also L<nbdkit-checkwrite-filter(1)>.
+ 
+ =over 4
+ 
++=item B<blocksize=>N
++
++Set the block size.  This is the granularity that this plugin operates
++at.  Sparse extents will be aligned to the block size.
++
++It must be a power of 2 and E<ge> 1024.  The default is 4096.
++
+ =item B<percent=>N
+ 
+ Specify the approximate percentage of the disk which contains random
+diff --git a/plugins/sparse-random/sparse-random.c b/plugins/sparse-random/sparse-random.c
+index 823f85a1..8d1c2944 100644
+--- a/plugins/sparse-random/sparse-random.c
++++ b/plugins/sparse-random/sparse-random.c
+@@ -36,6 +36,7 @@
+ #include <stdlib.h>
+ #include <stdint.h>
+ #include <inttypes.h>
++#include <limits.h>
+ #include <string.h>
+ #include <errno.h>
+ #include <time.h>
+@@ -46,6 +47,7 @@
+ #include "bitmap.h"
+ #include "cleanup.h"
+ #include "isaligned.h"
++#include "ispowerof2.h"
+ #include "iszero.h"
+ #include "minmax.h"
+ #include "random.h"
+@@ -60,7 +62,7 @@ static int random_content;      /* false: Repeat same byte  true: Random bytes*/
+ /* We need to store 1 bit per block.  Using a 4K block size means we
+  * need 32M to map each 1T of virtual disk.
+  */
+-#define BLOCKSIZE 4096
++static unsigned blocksize = 4096;
+ 
+ static struct bitmap bm;        /* Bitmap of data blocks. */
+ 
+@@ -72,8 +74,6 @@ sparse_random_load (void)
+    * parameter.
+    */
+   seed = time (NULL);
+-
+-  bitmap_init (&bm, BLOCKSIZE, 1 /* bits per block */);
+ }
+ 
+ static void
+@@ -97,6 +97,18 @@ sparse_random_config (const char *key, const char *value)
+       return -1;
+     size = r;
+   }
++  else if (strcmp (key, "blocksize") == 0 ||
++           strcmp (key, "block-size") == 0) {
++    r = nbdkit_parse_size (value);
++    if (r == -1)
++      return -1;
++    if (r < 1024 || r > 0x10000000 || !is_power_of_2 (r)) {
++      nbdkit_error ("block size must be a power of 2, "
++                    "and between 1024 and 2^28");
++      return -1;
++    }
++    blocksize = r;
++  }
+   else if (strcmp (key, "percent") == 0) {
+     if (sscanf (value, "%lf", &percent) != 1 ||
+         percent < 0 || percent > 100) {
+@@ -129,6 +141,7 @@ sparse_random_config (const char *key, const char *value)
+ 
+ #define sparse_random_config_help \
+   "size=<SIZE>  (required) Size of the backing disk\n" \
++  "blocksize=<SIZE>        Set block size (default: 4K)\n" \
+   "seed=<SEED>             Random number generator seed\n" \
+   "percent=<PERCENT>       Percentage of data\n" \
+   "runlength=<BYTES>       Expected average run length of data\n" \
+@@ -182,6 +195,8 @@ sparse_random_get_ready (void)
+   uint64_t data_run_length = 0;
+   uint64_t avg_data_run_length = 0;
+ 
++  bitmap_init (&bm, blocksize, 1 /* bits per block */);
++
+   if (bitmap_resize (&bm, size) == -1)
+     return -1;
+ 
+@@ -196,7 +211,7 @@ sparse_random_get_ready (void)
+   }
+ 
+   /* Otherwise calculate the probability parameters as above. */
+-  P_dh = 1. / ((double) runlength / BLOCKSIZE);
++  P_dh = 1. / ((double) runlength / blocksize);
+   P_hd = (percent / 100.) * P_dh / (1. - (percent / 100.));
+ 
+   nbdkit_debug ("percent requested = %g%%, "
+@@ -242,8 +257,8 @@ sparse_random_get_ready (void)
+     avg_data_run_length = 0;
+   nbdkit_debug ("percent actual = %g%%, "
+                 "average run length = %" PRIu64,
+-                100. * BLOCKSIZE * nr_data_blocks / size,
+-                avg_data_run_length * BLOCKSIZE);
++                100. * blocksize * nr_data_blocks / size,
++                avg_data_run_length * blocksize);
+ 
+   return 0;
+ }
+@@ -270,7 +285,7 @@ sparse_random_block_size (void *handle,
+                           uint32_t *maximum)
+ {
+   *minimum = 1;
+-  *preferred = BLOCKSIZE;
++  *preferred = blocksize;
+   *maximum = 0xffffffff;
+   return 0;
+ }
+@@ -301,20 +316,20 @@ read_block (uint64_t blknum, uint64_t offset, void *buf)
+   struct random_state state;
+ 
+   if (bitmap_get_blk (&bm, blknum, 0) == 0) /* hole */
+-    memset (buf, 0, BLOCKSIZE);
++    memset (buf, 0, blocksize);
+   else if (!random_content) {   /* data when random-content=false */
+     xsrandom (seed + offset, &state);
+     s = xrandom (&state);
+     s &= 255;
+     if (s == 0) s = 1;
+-    memset (buf, (int)s, BLOCKSIZE);
++    memset (buf, (int)s, blocksize);
+   }
+   else {                        /* data when random-content=true */
+     /* This produces repeatable data for the same offset.  Note it
+      * works because we are called on whole blocks only.
+      */
+     xsrandom (seed + offset, &state);
+-    for (i = 0; i < BLOCKSIZE; ++i) {
++    for (i = 0; i < blocksize; ++i) {
+       s = xrandom (&state);
+       s &= 255;
+       b[i] = s;
+@@ -330,20 +345,20 @@ sparse_random_pread (void *handle, void *buf, uint32_t count, uint64_t offset,
+   CLEANUP_FREE uint8_t *block = NULL;
+   uint64_t blknum, blkoffs;
+ 
+-  if (!IS_ALIGNED (count | offset, BLOCKSIZE)) {
+-    block = malloc (BLOCKSIZE);
++  if (!IS_ALIGNED (count | offset, blocksize)) {
++    block = malloc (blocksize);
+     if (block == NULL) {
+       nbdkit_error ("malloc: %m");
+       return -1;
+     }
+   }
+ 
+-  blknum = offset / BLOCKSIZE;  /* block number */
+-  blkoffs = offset % BLOCKSIZE; /* offset within the block */
++  blknum = offset / blocksize;  /* block number */
++  blkoffs = offset % blocksize; /* offset within the block */
+ 
+   /* Unaligned head */
+   if (blkoffs) {
+-    uint64_t n = MIN (BLOCKSIZE - blkoffs, count);
++    uint64_t n = MIN (blocksize - blkoffs, count);
+ 
+     read_block (blknum, offset, block);
+     memcpy (buf, &block[blkoffs], n);
+@@ -355,12 +370,12 @@ sparse_random_pread (void *handle, void *buf, uint32_t count, uint64_t offset,
+   }
+ 
+   /* Aligned body */
+-  while (count >= BLOCKSIZE) {
++  while (count >= blocksize) {
+     read_block (blknum, offset, buf);
+ 
+-    buf += BLOCKSIZE;
+-    count -= BLOCKSIZE;
+-    offset += BLOCKSIZE;
++    buf += blocksize;
++    count -= blocksize;
++    offset += blocksize;
+     blknum++;
+   }
+ 
+@@ -386,18 +401,18 @@ sparse_random_pwrite (void *handle, const void *buf,
+   CLEANUP_FREE uint8_t *block;
+   uint64_t blknum, blkoffs;
+ 
+-  block = malloc (BLOCKSIZE);
++  block = malloc (blocksize);
+   if (block == NULL) {
+     nbdkit_error ("malloc: %m");
+     return -1;
+   }
+ 
+-  blknum = offset / BLOCKSIZE;  /* block number */
+-  blkoffs = offset % BLOCKSIZE; /* offset within the block */
++  blknum = offset / blocksize;  /* block number */
++  blkoffs = offset % blocksize; /* offset within the block */
+ 
+   /* Unaligned head */
+   if (blkoffs) {
+-    uint64_t n = MIN (BLOCKSIZE - blkoffs, count);
++    uint64_t n = MIN (blocksize - blkoffs, count);
+ 
+     read_block (blknum, offset, block);
+     if (memcmp (buf, &block[blkoffs], n) != 0) {
+@@ -414,23 +429,23 @@ sparse_random_pwrite (void *handle, const void *buf,
+   }
+ 
+   /* Aligned body */
+-  while (count >= BLOCKSIZE) {
++  while (count >= blocksize) {
+     /* As an optimization, skip calling read_block if we know this is
+      * a hole.  Call is_zero instead which should be faster.
+      */
+     if (bitmap_get_blk (&bm, blknum, 0) == 0) {
+-      if (! is_zero (buf, BLOCKSIZE))
++      if (! is_zero (buf, blocksize))
+         goto unexpected_data;
+     }
+     else {
+       read_block (blknum, offset, block);
+-      if (memcmp (buf, block, BLOCKSIZE) != 0)
++      if (memcmp (buf, block, blocksize) != 0)
+         goto unexpected_data;
+     }
+ 
+-    buf += BLOCKSIZE;
+-    count -= BLOCKSIZE;
+-    offset += BLOCKSIZE;
++    buf += blocksize;
++    count -= blocksize;
++    offset += blocksize;
+     blknum++;
+   }
+ 
+@@ -465,12 +480,12 @@ sparse_random_trim_zero (void *handle, uint32_t count, uint64_t offset,
+ {
+   uint64_t blknum, blkoffs;
+ 
+-  blknum = offset / BLOCKSIZE;  /* block number */
+-  blkoffs = offset % BLOCKSIZE; /* offset within the block */
++  blknum = offset / blocksize;  /* block number */
++  blkoffs = offset % blocksize; /* offset within the block */
+ 
+   /* Unaligned head */
+   if (blkoffs) {
+-    uint64_t n = MIN (BLOCKSIZE - blkoffs, count);
++    uint64_t n = MIN (blocksize - blkoffs, count);
+ 
+     if (bitmap_get_blk (&bm, blknum, 0) != 0) {
+     unexpected_trim:
+@@ -485,12 +500,12 @@ sparse_random_trim_zero (void *handle, uint32_t count, uint64_t offset,
+   }
+ 
+   /* Aligned body */
+-  while (count >= BLOCKSIZE) {
++  while (count >= blocksize) {
+     if (bitmap_get_blk (&bm, blknum, 0) != 0)
+       goto unexpected_trim;
+ 
+-    count -= BLOCKSIZE;
+-    offset += BLOCKSIZE;
++    count -= blocksize;
++    offset += blocksize;
+     blknum++;
+   }
+ 
+@@ -510,12 +525,12 @@ sparse_random_extents (void *handle, uint32_t count, uint64_t offset,
+   uint64_t blknum, blkoffs;
+   uint32_t type;
+ 
+-  blknum = offset / BLOCKSIZE;  /* block number */
+-  blkoffs = offset % BLOCKSIZE; /* offset within the block */
++  blknum = offset / blocksize;  /* block number */
++  blkoffs = offset % blocksize; /* offset within the block */
+ 
+   /* Unaligned head */
+   if (blkoffs) {
+-    uint64_t n = MIN (BLOCKSIZE - blkoffs, count);
++    uint64_t n = MIN (blocksize - blkoffs, count);
+ 
+     if (bitmap_get_blk (&bm, blknum, 0) == 0)
+       type = NBDKIT_EXTENT_HOLE | NBDKIT_EXTENT_ZERO;
+@@ -530,16 +545,16 @@ sparse_random_extents (void *handle, uint32_t count, uint64_t offset,
+   }
+ 
+   /* Aligned body */
+-  while (count >= BLOCKSIZE) {
++  while (count >= blocksize) {
+     if (bitmap_get_blk (&bm, blknum, 0) == 0)
+       type = NBDKIT_EXTENT_HOLE | NBDKIT_EXTENT_ZERO;
+     else
+       type = 0; /* data */
+-    if (nbdkit_add_extent (extents, offset, BLOCKSIZE, type) == -1)
++    if (nbdkit_add_extent (extents, offset, blocksize, type) == -1)
+       return -1;
+ 
+-    count -= BLOCKSIZE;
+-    offset += BLOCKSIZE;
++    count -= blocksize;
++    offset += blocksize;
+     blknum++;
+   }
+ 
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index e2bc640d..2ae0c3c2 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -1293,10 +1293,12 @@ EXTRA_DIST += \
+ 
+ # sparse-random plugin test.
+ TESTS += \
++	test-sparse-random-blocksize.sh \
+ 	test-sparse-random-copy.sh \
+ 	test-sparse-random-info.sh \
+ 	$(NULL)
+ EXTRA_DIST += \
++	test-sparse-random-blocksize.sh \
+ 	test-sparse-random-copy.sh \
+ 	test-sparse-random-info.sh \
+ 	$(NULL)
+diff --git a/tests/test-sparse-random-blocksize.sh b/tests/test-sparse-random-blocksize.sh
+new file mode 100755
+index 00000000..c1230809
+--- /dev/null
++++ b/tests/test-sparse-random-blocksize.sh
+@@ -0,0 +1,49 @@
++#!/usr/bin/env bash
++# nbdkit
++# Copyright Red Hat
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met:
++#
++# * Redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer.
++#
++# * Redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution.
++#
++# * Neither the name of Red Hat nor the names of its contributors may be
++# used to endorse or promote products derived from this software without
++# specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++# SUCH DAMAGE.
++
++# Test the sparse-random plugin with non-standard blocksize.
++
++source ./functions.sh
++set -e
++set -x
++set -u
++
++requires_run
++
++# nbdcopy >= 1.5.9 required for this test.
++requires_nbdcopy
++requires_libnbd_version 1.5.9
++
++nbdkit -v \
++       sparse-random \
++       size=10G blocksize=64K \
++       --run 'nbdcopy "$uri" "$uri"'
+-- 
+2.47.3
+

@@ -1,0 +1,31 @@
+From dad58135284cb5e884bccdc8868b1ba2e245a3d3 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 15 Jan 2026 15:02:53 +0000
+Subject: [PATCH] server/test-public.c: Add process_name dummy variable
+
+This is required for the test to link correctly:
+
+  libtool: link: gcc -Wall -Wshadow -Wvla -Werror -g -O2 -o test-public test_public-test-public.o test_public-public.o test_public-exports.o test_public-extents.o  ../common/utils/.libs/libutils.a -lpthread -lz ../common/replacements/.libs/libcompat.a -lm -pthread
+  /usr/bin/ld: test_public-public.o: in function `nbdkit_name':
+  /builds/nbdkit/nbdkit/server/public.c:1228:(.text+0x1e53): undefined reference to `process_name'
+
+(cherry picked from commit 038e79802d5872a7a5e9079bdfee9fe1caa5459b)
+---
+ server/test-public.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/server/test-public.c b/server/test-public.c
+index 65b17d59..3ef530ff 100644
+--- a/server/test-public.c
++++ b/server/test-public.c
+@@ -71,6 +71,7 @@ bool listen_stdin;
+ bool configured;
+ bool verbose;
+ int tls;
++const char *process_name;
+ 
+ volatile int quit;
+ #ifndef WIN32
+-- 
+2.47.3
+

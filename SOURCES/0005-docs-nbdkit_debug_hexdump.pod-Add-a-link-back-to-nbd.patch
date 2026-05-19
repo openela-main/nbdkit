@@ -1,0 +1,27 @@
+From 3a75b229eec051b473886f7a324751c89d87a35f Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 30 Dec 2025 22:01:04 +0000
+Subject: [PATCH] docs/nbdkit_debug_hexdump.pod: Add a link back to
+ nbdkit-checkwrite-filter
+
+Updates: commit 6a1c92f6a30941f8a891e704eeb95296e6d5669a
+(cherry picked from commit 674f72a6553b97f86f8f8a276f86354c977d339f)
+---
+ docs/nbdkit_debug_hexdump.pod | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/docs/nbdkit_debug_hexdump.pod b/docs/nbdkit_debug_hexdump.pod
+index 4c4cae19..1a428699 100644
+--- a/docs/nbdkit_debug_hexdump.pod
++++ b/docs/nbdkit_debug_hexdump.pod
+@@ -62,6 +62,7 @@ L<nbdkit(1)>,
+ L<nbdkit_debug(3)>,
+ L<nbdkit-plugin(3)>,
+ L<nbdkit-filter(3)>,
++L<nbdkit-checkwrite-filter(1)>,
+ L<nbdkit-evil-filter(1)>,
+ L<nbddump(1)>,
+ L<hexdump(1)>.
+-- 
+2.47.3
+

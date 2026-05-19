@@ -1,4 +1,4 @@
-From aba2a885ab8dc8796fdc8f100cd35ad621bb307a Mon Sep 17 00:00:00 2001
+From f4968119f7b8b01d5b88c2f015bad9b4338480ad Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Fri, 3 Apr 2026 14:10:51 +0100
 Subject: [PATCH] cow: Make some offset variables const

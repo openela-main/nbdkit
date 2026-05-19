@@ -1,0 +1,407 @@
+From baad76a69681c0442d12010a53eb54677ff47953 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 15 Jan 2026 12:07:40 +0000
+Subject: [PATCH] Add new nbdkit_name() function
+
+In nbdkit 1.46 we added a --name parameter to name nbdkit instances.
+This was only used in debug and error messages.  For a forthcoming
+feature it would be nice if the plugin could get the instance name.
+
+The new nbdkit_name() function is very simple.  It returns the string
+set through the nbdkit --name parameter, or NULL if it was not set.
+
+NULL does not indicate an error.  I thought it was better to return
+NULL as a distinct "not set" value rather than using a default like
+"nbdkit" or PACKAGE_NAME, so the plugin can decide what to do.
+
+RHEL:
+  Cherry picked from commit 5c24949959ccf8cf9f1093adf81336009df23f2d
+  and added a note about being backported in RHEL 10.2.
+---
+ .gitignore                |  1 +
+ docs/Makefile.am          |  7 ++++
+ docs/nbdkit-plugin.pod    |  1 +
+ docs/nbdkit.pod           |  2 +-
+ docs/nbdkit_name.pod      | 45 ++++++++++++++++++++
+ include/nbdkit-common.h   |  1 +
+ server/nbdkit.syms        |  1 +
+ server/public.c           |  6 +++
+ tests/Makefile.am         | 25 +++++++++++
+ tests/test-name-plugin.c  | 88 +++++++++++++++++++++++++++++++++++++++
+ tests/test-name-plugin.sh | 60 ++++++++++++++++++++++++++
+ 11 files changed, 236 insertions(+), 1 deletion(-)
+ create mode 100644 docs/nbdkit_name.pod
+ create mode 100644 tests/test-name-plugin.c
+ create mode 100755 tests/test-name-plugin.sh
+
+diff --git a/.gitignore b/.gitignore
+index 3562a665..55d971e6 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -33,6 +33,7 @@ docs/nbdkit_error.3
+ docs/nbdkit_export_name.3
+ docs/nbdkit-filter.3
+ docs/nbdkit_is_tls.3
++docs/nbdkit_name.3
+ docs/nbdkit_nanosleep.3
+ docs/nbdkit_parse_bool.3
+ docs/nbdkit_parse_delay.3
+diff --git a/docs/Makefile.am b/docs/Makefile.am
+index 4ee6994c..a43b13ed 100644
+--- a/docs/Makefile.am
++++ b/docs/Makefile.am
+@@ -44,6 +44,7 @@ EXTRA_DIST = \
+ 	nbdkit-filter.pod \
+ 	nbdkit_is_tls.pod \
+ 	nbdkit-loop.pod \
++	nbdkit_name.pod \
+ 	nbdkit_nanosleep.pod \
+ 	nbdkit_parse_bool.pod \
+ 	nbdkit_parse_delay.pod \
+@@ -134,6 +135,7 @@ generated_mans = \
+ 	nbdkit-filter.3 \
+ 	nbdkit_is_tls.3 \
+ 	nbdkit-loop.1 \
++	nbdkit_name.3 \
+ 	nbdkit_nanosleep.3 \
+ 	nbdkit_parse_bool.3 \
+ 	nbdkit_parse_delay.3 \
+@@ -241,6 +243,11 @@ nbdkit-loop.1: nbdkit-loop.pod $(top_builddir)/podwrapper.pl
+ 	    --html $(top_builddir)/html/$@.html \
+ 	    $<
+ 
++nbdkit_name.3: nbdkit_name.pod $(top_builddir)/podwrapper.pl
++	$(PODWRAPPER) --section=3 --man $@ \
++	    --html $(top_builddir)/html/$@.html \
++	    $<
++
+ nbdkit_nanosleep.3: nbdkit_nanosleep.pod $(top_builddir)/podwrapper.pl
+ 	$(PODWRAPPER) --section=3 --man $@ \
+ 	    --html $(top_builddir)/html/$@.html \
+diff --git a/docs/nbdkit-plugin.pod b/docs/nbdkit-plugin.pod
+index 308364d4..41f65908 100644
+--- a/docs/nbdkit-plugin.pod
++++ b/docs/nbdkit-plugin.pod
+@@ -1630,6 +1630,7 @@ L<nbdkit_disconnect(3)>,
+ L<nbdkit_error(3)>,
+ L<nbdkit_export_name(3)>,
+ L<nbdkit_is_tls(3)>,
++L<nbdkit_name(3)>,
+ L<nbdkit_nanosleep(3)>,
+ L<nbdkit_parse_bool(3)>,
+ L<nbdkit_parse_delay(3)>,
+diff --git a/docs/nbdkit.pod b/docs/nbdkit.pod
+index e8ff9438..3104d751 100644
+--- a/docs/nbdkit.pod
++++ b/docs/nbdkit.pod
+@@ -356,7 +356,7 @@ Name this nbdkit instance.  This allows you to associate names with
+ nbdkit processes, if you have several.  The name appears in error and
+ debug messages, but is otherwise unused by nbdkit.  The name can be
+ any string, but usually a short string containing only letters,
+-numbers and common punctuation is best.
++numbers and common punctuation is best.  See also L<nbdkit_name(3)>.
+ 
+ =item B<-n>
+ 
+diff --git a/docs/nbdkit_name.pod b/docs/nbdkit_name.pod
+new file mode 100644
+index 00000000..210c7d2f
+--- /dev/null
++++ b/docs/nbdkit_name.pod
+@@ -0,0 +1,45 @@
++=head1 NAME
++
++nbdkit_name - get the name of the nbdkit instance
++
++=head1 SYNOPSIS
++
++ #include <nbdkit-plugin.h>
++
++ const char *nbdkit_name (void);
++
++=head1 DESCRIPTION
++
++C<nbdkit_name> returns the name of the nbdkit instance.  This is the
++string which was set through the nbdkit I<--name> parameter.  If the
++name was not set, this returns C<NULL>.
++
++=head1 RETURN VALUE
++
++The function returns a constant string, valid for the lifetime of the
++process, or C<NULL>.  Note that returning C<NULL> is not an error.
++
++=begin comment
++
++=head1 LANGUAGE BINDINGS
++
++=end comment
++
++=head1 HISTORY
++
++C<nbdkit_name> was added in nbdkit 1.48
++(and backported to RHEL 10.2).
++
++=head1 SEE ALSO
++
++L<nbdkit(1)>,
++L<nbdkit-plugin(3)>,
++L<nbdkit-filter(3)>.
++
++=head1 AUTHORS
++
++Richard W.M. Jones
++
++=head1 COPYRIGHT
++
++Copyright Red Hat
+diff --git a/include/nbdkit-common.h b/include/nbdkit-common.h
+index d23fedb0..4b42c9d7 100644
+--- a/include/nbdkit-common.h
++++ b/include/nbdkit-common.h
+@@ -204,6 +204,7 @@ NBDKIT_EXTERN_DECL (char *, nbdkit_peer_tls_issuer_dn,
+                     (void) NBDKIT_ATTRIBUTE_MALLOC (free));
+ NBDKIT_EXTERN_DECL (void, nbdkit_shutdown, (void));
+ NBDKIT_EXTERN_DECL (void, nbdkit_disconnect, (int force));
++NBDKIT_EXTERN_DECL (const char *, nbdkit_name, (void));
+ 
+ NBDKIT_EXTERN_DECL (const char *, nbdkit_strdup_intern,
+                     (const char *str)
+diff --git a/server/nbdkit.syms b/server/nbdkit.syms
+index c22356fb..bf6bb378 100644
+--- a/server/nbdkit.syms
++++ b/server/nbdkit.syms
+@@ -60,6 +60,7 @@
+     nbdkit_get_export;
+     nbdkit_get_extent;
+     nbdkit_is_tls;
++    nbdkit_name;
+     nbdkit_nanosleep;
+     nbdkit_next_context_close;
+     nbdkit_next_context_open;
+diff --git a/server/public.c b/server/public.c
+index e1a45ed0..d08930dd 100644
+--- a/server/public.c
++++ b/server/public.c
+@@ -1220,3 +1220,9 @@ nbdkit_disconnect (int force)
+     conn->close (SHUT_WR);
+   }
+ }
++
++NBDKIT_DLL_PUBLIC const char *
++nbdkit_name (void)
++{
++  return process_name;
++}
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index beeb0fc3..f0665926 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -272,6 +272,7 @@ TESTS += \
+ 	test-version-filter.sh \
+ 	test-name.sh \
+ 	test-no-name.sh \
++	test-name-plugin.sh \
+ 	test-dump-plugin-example1.sh \
+ 	test-dump-plugin.sh \
+ 	test-dump-plugin-example2.sh \
+@@ -385,6 +386,7 @@ EXTRA_DIST += \
+ 	test-log-to-file-append.sh \
+ 	test-long-name.sh \
+ 	test-name.sh \
++	test-name-plugin.sh \
+ 	test-nbd-client-tls.sh \
+ 	test-nbd-client.sh \
+ 	test-nbdkit-backend-debug.sh \
+@@ -578,6 +580,29 @@ test_debug_hexdiff_plugin_la_LDFLAGS = \
+ 	$(NULL)
+ test_debug_hexdiff_plugin_la_LIBADD = $(IMPORT_LIBRARY_ON_WINDOWS)
+ 
++# check_LTLIBRARIES won't build a shared library (see automake manual).
++# So we have to do this and add a dependency.
++noinst_LTLIBRARIES += \
++	test-name-plugin.la \
++	$(NULL)
++test-name-plugin.sh: test-name-plugin.la
++
++test_name_plugin_la_SOURCES = \
++	test-name-plugin.c \
++	$(top_srcdir)/include/nbdkit-plugin.h \
++	$(NULL)
++test_name_plugin_la_CPPFLAGS = \
++	-I$(top_srcdir)/include \
++	-I$(top_builddir)/include \
++	$(NULL)
++test_name_plugin_la_CFLAGS = $(WARNINGS_CFLAGS)
++# For use of the -rpath option, see:
++# https://lists.gnu.org/archive/html/libtool/2007-07/msg00067.html
++test_name_plugin_la_LDFLAGS = \
++	-module -avoid-version -shared $(NO_UNDEFINED_ON_WINDOWS) -rpath /nowhere \
++	$(NULL)
++test_name_plugin_la_LIBADD = $(IMPORT_LIBRARY_ON_WINDOWS)
++
+ endif HAVE_PLUGINS
+ 
+ # Test the header files can be included on their own.
+diff --git a/tests/test-name-plugin.c b/tests/test-name-plugin.c
+new file mode 100644
+index 00000000..a4f8073b
+--- /dev/null
++++ b/tests/test-name-plugin.c
+@@ -0,0 +1,88 @@
++/* nbdkit
++ * Copyright Red Hat
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are
++ * met:
++ *
++ * * Redistributions of source code must retain the above copyright
++ * notice, this list of conditions and the following disclaimer.
++ *
++ * * Redistributions in binary form must reproduce the above copyright
++ * notice, this list of conditions and the following disclaimer in the
++ * documentation and/or other materials provided with the distribution.
++ *
++ * * Neither the name of Red Hat nor the names of its contributors may be
++ * used to endorse or promote products derived from this software without
++ * specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++ * USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++ * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++/* This plugin reflects the nbdkit --name parameter back through the
++ * content of the plugin.  If not set, the content is "NONE" (4 bytes).
++ *
++ * The corresponding test is 'test-name-plugin.sh'.
++ */
++
++#include <config.h>
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#define NBDKIT_API_VERSION 2
++#include <nbdkit-plugin.h>
++
++static const char *name;
++
++static void
++name_load (void)
++{
++  /* The API can return NULL, it's not an error. */
++  name = nbdkit_name () ? : "NONE";
++}
++
++static void *
++flush_open (int readonly)
++{
++  return NBDKIT_HANDLE_NOT_NEEDED;
++}
++
++static int64_t
++flush_get_size (void *handle)
++{
++  return strlen (name);
++}
++
++#define THREAD_MODEL NBDKIT_THREAD_MODEL_PARALLEL
++
++static int
++flush_pread (void *handle, void *buf, uint32_t count, uint64_t offset,
++             uint32_t flags)
++{
++  memcpy (buf, &name[offset], count);
++  return 0;
++}
++
++static struct nbdkit_plugin plugin = {
++  .name              = "name",
++  .version           = PACKAGE_VERSION,
++  .load              = name_load,
++  .open              = flush_open,
++  .get_size          = flush_get_size,
++  .pread             = flush_pread,
++};
++
++NBDKIT_REGISTER_PLUGIN (plugin)
+diff --git a/tests/test-name-plugin.sh b/tests/test-name-plugin.sh
+new file mode 100755
+index 00000000..842d0da7
+--- /dev/null
++++ b/tests/test-name-plugin.sh
+@@ -0,0 +1,60 @@
++#!/usr/bin/env bash
++# nbdkit
++# Copyright Red Hat
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met:
++#
++# * Redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer.
++#
++# * Redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution.
++#
++# * Neither the name of Red Hat nor the names of its contributors may be
++# used to endorse or promote products derived from this software without
++# specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++# SUCH DAMAGE.
++
++# Test the nbdkit_name () API.
++
++source ./functions.sh
++set -e
++set -x
++set -u
++
++requires_run
++requires_nbdcopy
++
++plugin=.libs/test-name-plugin.$SOEXT
++requires test -f $plugin
++
++out=name-plugin.out
++cleanup_fn rm -f "$out"
++rm -f "$out"
++
++# nbdkit with --name parameter.
++export out
++nbdkit --name TEST "$plugin" --run 'nbdcopy "$uri" "$out"'
++test "$(cat "$out")" = "TEST"
++
++nbdkit --name "" "$plugin" --run 'nbdcopy "$uri" "$out"'
++test "$(cat "$out")" = ""
++
++# nbdkit without --name parameter.
++nbdkit "$plugin" --run 'nbdcopy "$uri" "$out"'
++test "$(cat "$out")" = "NONE"
+-- 
+2.47.3
+

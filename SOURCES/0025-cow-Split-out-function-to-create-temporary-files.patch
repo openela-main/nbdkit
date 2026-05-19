@@ -1,4 +1,4 @@
-From 0fc4138b253d3803ea2239df2f268c005ee3b3f4 Mon Sep 17 00:00:00 2001
+From 710967c5bb4c26d4df7c40ee9c29fa11cf1a7de5 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Wed, 1 Apr 2026 16:03:21 +0100
 Subject: [PATCH] cow: Split out function to create temporary files

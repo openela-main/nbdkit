@@ -1,0 +1,104 @@
+From 05b8884ccab68a224fe4f240557082fb575bc407 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sat, 31 Jan 2026 14:34:39 +0000
+Subject: [PATCH] tests/test-ip-filter.sh: Remove use of pick_unused_port
+
+Since nbdkit --port=0 is working somewhat now, we can remove use of
+the racy pick_unused_port function.
+
+We can now improve this test to check IPv6 only filtering.
+
+(cherry picked from commit 1e1ba9b58a5988af746de0b3c0472e12462b8eb0)
+---
+ TODO.md                 | 16 ++++++++++------
+ tests/test-ip-filter.sh | 40 ++++++++++++++++++++++++++++++----------
+ 2 files changed, 40 insertions(+), 16 deletions(-)
+
+diff --git a/TODO.md b/TODO.md
+index af272405..ecb36f29 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -77,12 +77,16 @@
+   particular `SOL_TCP` + `TCP_KEEPCNT`, `SOL_TCP` + `TCP_KEEPIDLE`,
+   and `SOL_TCP` + `TCP_KEEPINTVL`.
+ 
+-* Using `--port=0` (to get the kernel to pick a random port) works,
+-  but the URI in `--print-uri` and `$uri` is wrong.  Fixing this is
+-  difficult because we generate and print the URI early, long before
+-  we bind to ports.  There is a case for binding to ports before
+-  closing stdio, but that is quite a large change and needs some
+-  careful thought.
++* Using `--port=0` (to get the kernel to pick a random port) works:
++
++  - But the URI in `--print-uri` and `$uri` is wrong.  Fixing this is
++    difficult because we generate and print the URI early, long before
++    we bind to ports.  There is a case for binding to ports before
++    closing stdio, but that is quite a large change and needs some
++    careful thought.
++
++  - Consider exposing `$port4` and `$port6` to `--run` scripts.  This
++    would allow `tests/test-ip-filter.sh` to work.
+ 
+ * `nbdkit_timestamp()` does not work when called on the main thread.
+   This is because the main thread does not allocate thread-local
+diff --git a/tests/test-ip-filter.sh b/tests/test-ip-filter.sh
+index cb7d6315..c8f7b051 100755
+--- a/tests/test-ip-filter.sh
++++ b/tests/test-ip-filter.sh
+@@ -38,7 +38,7 @@ set -e
+ set -x
+ set -u
+ 
+-requires ip -V
++requires_run
+ requires_nbdinfo
+ requires_ipv6_loopback
+ 
+@@ -46,15 +46,35 @@ requires_ipv6_loopback
+ # "nbd://[::1]:$port" URIs (commit 17df436cea5 added in 1.7.7).
+ requires_libnbd_version 1.8
+ 
+-rm -f ip-filter.pid
+-cleanup_fn rm -f ip-filter.pid
++fail=0
+ 
+-# Find an unused port to listen on.
+-pick_unused_port
++# Allow IPv4 and IPv6.
++nbdkit -v --port=0 --filter=ip null \
++       -D ip.rules=1 \
++       allow=allipv4,allipv6 deny=all \
++       --run '
++    nbdinfo "nbd://127.0.0.1:$port"
++    nbdinfo "nbd://[::1]:$port"
++'
+ 
+-start_nbdkit -P ip-filter.pid -p $port --filter=ip null \
+-             -D ip.rules=1 \
+-             allow=allipv4,allipv6 deny=all
++# Allow IPv4 only, deny IPv6.
++# XXX We cannot test this because $port is set preferentially to the
++# IPv6 port, and we cannot find the IPv4 port here.
++#nbdkit -v --port=0 --filter=ip null \
++#       -D ip.rules=1 \
++#       allow=allipv4 deny=all --run 'nbdinfo "nbd://127.0.0.1:$port"'
++#
++#nbdkit -v --port=0 --filter=ip null \
++#       -D ip.rules=1 \
++#       allow=allipv4 deny=all --run 'nbdinfo "nbd://[::1]:$port"' && fail=1
+ 
+-nbdinfo "nbd://127.0.0.1:$port"
+-nbdinfo "nbd://[::1]:$port"
++# Allow IPv6 only, deny IPv4.
++nbdkit -v --port=0 --filter=ip null \
++       -D ip.rules=1 \
++       allow=allipv6 deny=all --run 'nbdinfo "nbd://[::1]:$port"'
++
++nbdkit -v --port=0 --filter=ip null \
++       -D ip.rules=1 \
++       allow=allipv6 deny=all --run 'nbdinfo "nbd://127.0.0.1:$port"' && fail=1
++
++exit $fail
+-- 
+2.47.3
+

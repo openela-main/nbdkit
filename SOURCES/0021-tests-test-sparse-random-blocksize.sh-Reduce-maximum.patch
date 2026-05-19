@@ -1,0 +1,40 @@
+From 2e4212b86bd56ff6aaec6166cc3198050fcb172a Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 8 Feb 2026 22:10:17 +0000
+Subject: [PATCH] tests/test-sparse-random-blocksize.sh: Reduce maximum block
+ size
+
+On i686 this would fail if blocksize=32M was chosen, because we could
+allocate (up to) 4 connections * 16 threads * 32M == 2G of RAM.
+Probably we are not allocating that much, but it still often failed
+with blocksize=32M.
+
+Reduce the maximum we will choose down to 8M.
+
+(cherry picked from commit 5edcc592dc9d4466596618da2d7507b575492a02)
+---
+ tests/test-sparse-random-blocksize.sh | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/tests/test-sparse-random-blocksize.sh b/tests/test-sparse-random-blocksize.sh
+index 3ddc1f26..29eec3f8 100755
+--- a/tests/test-sparse-random-blocksize.sh
++++ b/tests/test-sparse-random-blocksize.sh
+@@ -49,7 +49,13 @@ cleanup_fn rm -f $out
+ rm -f $out
+ 
+ #blocksize=65536
+-blocksize_r="$(( 10 + (RANDOM % 19) ))"  ;# 10..28
++
++# We could do this:
++#blocksize_r="$(( 10 + (RANDOM % 19) ))"  ;# 10..28
++# but if this picks a 32M block size, then this could consume up to
++# 4 * 16 * 32 == 2048 MB of RAM.  This is a problem on smaller systems
++# (and especially 32 bit), so choose a lesser maximum.
++blocksize_r="$(( 10 + (RANDOM % 17) ))"   ;# 10..26
+ blocksize="$(( 1 << blocksize_r ))"
+ 
+ export out
+-- 
+2.47.3
+

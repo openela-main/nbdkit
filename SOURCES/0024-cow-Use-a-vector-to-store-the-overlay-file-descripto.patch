@@ -1,4 +1,4 @@
-From d0f211ae730f5cea4610b1e5455f2ca649c9ae69 Mon Sep 17 00:00:00 2001
+From 9434e8839e55ac90250a235c22d201a632a1dfe7 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Wed, 1 Apr 2026 15:33:30 +0100
 Subject: [PATCH] cow: Use a vector to store the overlay file descriptor

@@ -1,0 +1,28 @@
+From 90547ea1ee742cf79a46dc0166f5d642df58b480 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 29 Jan 2026 19:27:07 +0000
+Subject: [PATCH] docs/nbdkit_timestamp.pod: Fix copy and paste error in man
+ page
+
+Fixes: commit 773d958c8f2a5043053d385b8bfe287c43ee63d4
+(cherry picked from commit 0aea0a18f4665a885b77e1c1461c2aba05a0c604)
+---
+ docs/nbdkit_timestamp.pod | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/nbdkit_timestamp.pod b/docs/nbdkit_timestamp.pod
+index 2662b204..2b6859cf 100644
+--- a/docs/nbdkit_timestamp.pod
++++ b/docs/nbdkit_timestamp.pod
+@@ -56,7 +56,7 @@ an error generating the timestamp, the string C<"!"> is returned.
+ 
+ =head1 HISTORY
+ 
+-C<nbdkit_name> was added in nbdkit 1.48.
++C<nbdkit_timestamp> was added in nbdkit 1.48.
+ 
+ =head1 SEE ALSO
+ 
+-- 
+2.47.3
+

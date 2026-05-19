@@ -1,0 +1,39 @@
+From bf567e9488c0241cd58c13ef998b208a7f8a58f3 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sun, 1 Feb 2026 21:21:59 +0000
+Subject: [PATCH] sparse-random: Clamp preferred block size
+
+The preferred block size must be between 512 and 32M.  It was possible
+to set a larger block size, so we must clamp it.  (I clamped it at
+both ends, even though currently the smallest block size is 1024).
+
+Fixes: commit 5612598a49aaf4ac49f1b3e096dc4945ea7df640
+(cherry picked from commit 7a7a103b0711a89a1912d6768db4a91bec3a5f17)
+---
+ plugins/sparse-random/sparse-random.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/sparse-random/sparse-random.c b/plugins/sparse-random/sparse-random.c
+index 8d1c2944..3d7da426 100644
+--- a/plugins/sparse-random/sparse-random.c
++++ b/plugins/sparse-random/sparse-random.c
+@@ -285,7 +285,15 @@ sparse_random_block_size (void *handle,
+                           uint32_t *maximum)
+ {
+   *minimum = 1;
+-  *preferred = blocksize;
++
++  /* Preferred blocksize must be 512..32M so clamp this value. */
++  if (blocksize < 512)
++    *preferred = 512;
++  else if (blocksize > 32*1024*1024)
++    *preferred = 32*1024*1024;
++  else
++    *preferred = blocksize;
++
+   *maximum = 0xffffffff;
+   return 0;
+ }
+-- 
+2.47.3
+

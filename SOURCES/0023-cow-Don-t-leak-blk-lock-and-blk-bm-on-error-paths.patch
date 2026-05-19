@@ -1,4 +1,4 @@
-From e60280f405be972d6ca585494825642817d37629 Mon Sep 17 00:00:00 2001
+From 9a178f43031d4f4b175adff7849ebfbd6b86081b Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Wed, 1 Apr 2026 15:30:15 +0100
 Subject: [PATCH] cow: Don't leak blk->lock and blk->bm on error paths

@@ -1,4 +1,4 @@
-From 021b9fab2ba58dde338658052b45618fcbb8ebc7 Mon Sep 17 00:00:00 2001
+From 159c55ed72616e6e52a031b4fe28d356c10a6b56 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Wed, 1 Apr 2026 16:43:45 +0100
 Subject: [PATCH] cow: Add name of the temporary file to debug output

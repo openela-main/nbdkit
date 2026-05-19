@@ -1,0 +1,214 @@
+From 410ee57d3708133527769e8b7eeddd5840226cb5 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sat, 31 Jan 2026 14:16:30 +0000
+Subject: [PATCH] server: Partially fix --port=0
+
+Using nbdkit --port=0 causes nbdkit to open a TCP/IP socket with the
+kernel choosing a random port number (usually two port numbers, one
+for IPv4 and IPv6).  This already worked, mostly, but it didn't update
+the port variable and so $port was not set correctly in --run scripts,
+making this option useless for our testing.
+
+Also it didn't, and still does not, set the $uri or the output of
+--print-uri correctly.  The URI still has ":0" as the port number.
+This is more difficult to fix, see my update to the TODO.md file.
+
+(cherry picked from commit 8251486ec7d899628de246bc3232ddb20dceaa53)
+---
+ TODO.md               | 15 +++++-------
+ docs/nbdkit.pod       | 12 ++++++++++
+ server/sockets.c      | 47 ++++++++++++++++++++++++++++++++++++++
+ tests/Makefile.am     |  2 ++
+ tests/test-ip-port.sh | 53 +++++++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 120 insertions(+), 9 deletions(-)
+ create mode 100755 tests/test-ip-port.sh
+
+diff --git a/TODO.md b/TODO.md
+index 46e2a0c6..af272405 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -77,15 +77,12 @@
+   particular `SOL_TCP` + `TCP_KEEPCNT`, `SOL_TCP` + `TCP_KEEPIDLE`,
+   and `SOL_TCP` + `TCP_KEEPINTVL`.
+ 
+-* Fix `--port=0` / allow nbdkit to choose a TCP port: Several tests
+-  rely on picking a random TCP port, which is racy.  The kernel can
+-  pick a port for us, and nbdkit `--print-uri` function can be used to
+-  display the random port to the user.  Because of a bug, nbdkit lets
+-  you choose `--port=0`, causing the kernel to pick a port, but
+-  `--print-uri` doesn't display the port, and a different port is
+-  picked for IPv4 and IPv6 (so it only makes sense to use this with
+-  `-4` or `-6` option).  Once this mess is fixed, the tests should be
+-  updated to use this.
++* Using `--port=0` (to get the kernel to pick a random port) works,
++  but the URI in `--print-uri` and `$uri` is wrong.  Fixing this is
++  difficult because we generate and print the URI early, long before
++  we bind to ports.  There is a case for binding to ports before
++  closing stdio, but that is quite a large change and needs some
++  careful thought.
+ 
+ * `nbdkit_timestamp()` does not work when called on the main thread.
+   This is because the main thread does not allocate thread-local
+diff --git a/docs/nbdkit.pod b/docs/nbdkit.pod
+index 3104d751..ac8a39b3 100644
+--- a/docs/nbdkit.pod
++++ b/docs/nbdkit.pod
+@@ -422,6 +422,18 @@ delete the file when it exits.
+ Change the TCP/IP port number on which nbdkit serves requests.
+ The default is C<10809>.  See also I<-i>.
+ 
++=item B<-p 0>
++
++=item B<--port=0>
++
++Setting port to C<0> causes nbdkit to bind to a random free port
++number.  On a dual-stack host it will usually bind to a I<different>
++localhost port number for IPv4 and IPv6.
++
++Currently I<--print-uri> will still print the port as C<":0"> (this is
++a bug), but the true port is available using the C<$port> variable in
++I<--run> scripts.
++
+ =item B<--print-uri>
+ 
+ Print the URI.  See L</NBD URIs and endpoints> above.
+diff --git a/server/sockets.c b/server/sockets.c
+index cef27d57..dad7fb3c 100644
+--- a/server/sockets.c
++++ b/server/sockets.c
+@@ -326,6 +326,53 @@ bind_tcpip_socket (sockets *socks)
+              (int) ntohs (portno));
+     }
+   }
++
++  /* If port == "0" then we let the kernel choose the port number.
++   * (In the normal dual-stack case, it will actually choose two port
++   * numbers, one for IPv4 and one for IPv6).  In this case we can
++   * overwrite the port variable with the chosen port number,
++   * preferring IPv6.
++   *
++   * In theory this loop could be combined with the one above but it
++   * makes the code very intricate.
++   */
++  if (strcmp (port, "0") == 0) {
++    static char port_str[16] = { 0 };
++    size_t i;
++    struct sockaddr_storage ss;
++    socklen_t sslen = sizeof ss;
++    const struct sockaddr_in *sin;
++    const struct sockaddr_in6 *sin6;
++
++    for (i = 0; i < socks->len; ++i) {
++      if (getsockname (socks->ptr[i], (struct sockaddr *) &ss, &sslen) == -1) {
++        debug ("getsockname: %m");
++        continue;
++      }
++      switch (ss.ss_family) {
++      case AF_INET:
++        sin = (const struct sockaddr_in *) &ss;
++        /* For IPv4, don't overwrite if the port_str is already set,
++         * so IPv6 takes priority.
++         */
++        if (port_str[0] == 0)
++          snprintf (port_str, sizeof port_str, "%d",
++                    (int) ntohs (sin->sin_port));
++        break;
++      case AF_INET6:
++        sin6 = (const struct sockaddr_in6 *) &ss;
++        /* Prefer IPv6, so always override the port_str here. */
++        snprintf (port_str, sizeof port_str, "%d",
++                  (int) ntohs (sin6->sin6_port));
++        break;
++      default:
++        abort ();
++      }
++    }
++
++    if (port_str[0] != 0)
++      port = port_str;
++  }
+ }
+ 
+ void
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index 8b7cb851..e2bc640d 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -302,6 +302,7 @@ TESTS += \
+ 	test-tls-priority.sh \
+ 	test-tls-psk.sh \
+ 	test-not-linked-to-libssl.sh \
++	test-ip-port.sh \
+ 	test-ipv4-lo.sh \
+ 	test-ipv6-lo.sh \
+ 	test-foreground.sh \
+@@ -379,6 +380,7 @@ EXTRA_DIST += \
+ 	test-foreground.sh \
+ 	test-help-example1.sh \
+ 	test-help-plugin.sh \
++	test-ip-port.sh \
+ 	test-ipv4-lo.sh \
+ 	test-ipv6-lo.sh \
+ 	test-keepalive.sh \
+diff --git a/tests/test-ip-port.sh b/tests/test-ip-port.sh
+new file mode 100755
+index 00000000..cc1aa32e
+--- /dev/null
++++ b/tests/test-ip-port.sh
+@@ -0,0 +1,53 @@
++#!/usr/bin/env bash
++# nbdkit
++# Copyright Red Hat
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met:
++#
++# * Redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer.
++#
++# * Redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution.
++#
++# * Neither the name of Red Hat nor the names of its contributors may be
++# used to endorse or promote products derived from this software without
++# specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++# SUCH DAMAGE.
++
++# Test that --run '$port' has the correct (non-zero) port number when
++# we use --port=0.
++
++source ./functions.sh
++set -e
++set -x
++set -u
++
++requires_run
++requires_nbdinfo
++
++define script <<'EOF'
++echo port = $port
++test "$port" -gt "0"
++
++# nbdkit does not yet construct $uri correctly when using --port=0
++# but it does set $port so this will work:
++nbdinfo nbd://localhost:$port
++EOF
++
++nbdkit -v --port=0 null --run "$script"
+-- 
+2.47.3
+

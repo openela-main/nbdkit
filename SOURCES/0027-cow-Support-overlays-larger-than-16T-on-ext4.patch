@@ -1,4 +1,4 @@
-From c02b8506469203e537fdf6fe37d4447cc4d358a3 Mon Sep 17 00:00:00 2001
+From d065b469450beeb8479149987d7dd3b201b58154 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Wed, 1 Apr 2026 16:37:01 +0100
 Subject: [PATCH] cow: Support overlays larger than 16T on ext4
@@ -173,10 +173,10 @@ index 1012fb5e..defd0d94 100644
    if (cow_debug_verbose)
      nbdkit_debug ("cow: blk_write block %" PRIu64 " (offset %" PRIu64 ")",
 diff --git a/tests/Makefile.am b/tests/Makefile.am
-index d7053ba2..bc66b61c 100644
+index 2ae0c3c2..df7b801b 100644
 --- a/tests/Makefile.am
 +++ b/tests/Makefile.am
-@@ -1724,7 +1724,10 @@ TESTS += \
+@@ -1890,7 +1890,10 @@ TESTS += \
  	test-cow-unaligned.sh \
  	$(NULL)
  endif
@@ -188,7 +188,7 @@ index d7053ba2..bc66b61c 100644
  EXTRA_DIST += \
  	test-cow.sh \
  	test-cow-block-size.sh \
-@@ -1732,6 +1735,7 @@ EXTRA_DIST += \
+@@ -1898,6 +1901,7 @@ EXTRA_DIST += \
  	test-cow-extents1.sh \
  	test-cow-extents2.sh \
  	test-cow-extents-large.sh \

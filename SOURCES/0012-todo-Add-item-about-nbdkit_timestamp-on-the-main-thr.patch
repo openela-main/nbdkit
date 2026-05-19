@@ -1,0 +1,33 @@
+From 996bb5a3acbf4478d4d568ddfdf32aa45fffb633 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Sat, 31 Jan 2026 08:41:56 +0000
+Subject: [PATCH] todo: Add item about nbdkit_timestamp on the main thread
+
+Updates: commit 773d958c8f2a5043053d385b8bfe287c43ee63d4
+(cherry picked from commit e3d6ffc314b9774af31235c3d7ae760f62978861)
+---
+ TODO.md | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/TODO.md b/TODO.md
+index 8488dd95..46e2a0c6 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -87,6 +87,14 @@
+   `-4` or `-6` option).  Once this mess is fixed, the tests should be
+   updated to use this.
+ 
++* `nbdkit_timestamp()` does not work when called on the main thread.
++  This is because the main thread does not allocate thread-local
++  storage (see [threadlocal.c](server/threadlocal.c)).  We could
++  either special-case this in `nbdkit_timestamp` or we could implement
++  thread-local storage for the main thread (but the latter may change
++  some assumptions in the code).  There may be other APIs that are
++  affected in this way too.
++
+ ## Suggestions for plugins
+ 
+ Note: qemu supports other formats such as iscsi and ceph/rbd, and
+-- 
+2.47.3
+

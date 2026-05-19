@@ -1,0 +1,538 @@
+From b546cd6870fcf16422d7fb240cb717fe4a298ce4 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 30 Dec 2025 15:24:13 +0000
+Subject: [PATCH] server: Add nbdkit_debug_hexdiff function
+
+Useful function for showing the differences between two buffers,
+similar to the earlier nbdkit_debug_hexdump function.
+
+This also adds a test.
+
+(cherry picked from commit 753d8d468240e613f3d905282446011c31548e34)
+---
+ docs/Makefile.am                  |   1 +
+ docs/nbdkit-plugin.pod            |   1 +
+ docs/nbdkit_debug.pod             |   1 +
+ docs/nbdkit_debug_hexdiff.3       |   1 +
+ docs/nbdkit_debug_hexdump.pod     |  25 ++++++-
+ include/nbdkit-common.h           |   4 +
+ server/debug.c                    |  75 +++++++++++++++++--
+ server/nbdkit.syms                |   1 +
+ tests/Makefile.am                 |  21 ++++++
+ tests/test-debug-hexdiff-plugin.c |  92 +++++++++++++++++++++++
+ tests/test-debug-hexdiff.sh       | 118 ++++++++++++++++++++++++++++++
+ 11 files changed, 331 insertions(+), 9 deletions(-)
+ create mode 100644 docs/nbdkit_debug_hexdiff.3
+ create mode 100755 tests/test-debug-hexdiff-plugin.c
+ create mode 100755 tests/test-debug-hexdiff.sh
+
+diff --git a/docs/Makefile.am b/docs/Makefile.am
+index 240d9e1d..4ee6994c 100644
+--- a/docs/Makefile.am
++++ b/docs/Makefile.am
+@@ -94,6 +94,7 @@ EXTRA_DIST = \
+ # tarball.
+ non_generated_mans = \
+ 	nbdkit_absolute_path.3 \
++	nbdkit_debug_hexdiff.3 \
+ 	nbdkit_disconnect.3 \
+ 	nbdkit_parse_int8_t.3 \
+ 	nbdkit_parse_int16_t.3 \
+diff --git a/docs/nbdkit-plugin.pod b/docs/nbdkit-plugin.pod
+index 61deb63b..308364d4 100644
+--- a/docs/nbdkit-plugin.pod
++++ b/docs/nbdkit-plugin.pod
+@@ -1624,6 +1624,7 @@ Utility functions provided by nbdkit for plugins and filters to use:
+ 
+ L<nbdkit_absolute_path(3)>,
+ L<nbdkit_debug(3)>,
++L<nbdkit_debug_hexdiff(3)>,
+ L<nbdkit_debug_hexdump(3)>,
+ L<nbdkit_disconnect(3)>,
+ L<nbdkit_error(3)>,
+diff --git a/docs/nbdkit_debug.pod b/docs/nbdkit_debug.pod
+index 43bb5a41..d58d9bda 100644
+--- a/docs/nbdkit_debug.pod
++++ b/docs/nbdkit_debug.pod
+@@ -57,6 +57,7 @@ C<nbdkit_debug> was present in nbdkit 0.1.0.
+ =head1 SEE ALSO
+ 
+ L<nbdkit(1)>,
++L<nbdkit_debug_hexdiff(3)>,
+ L<nbdkit_debug_hexdump(3)>,
+ L<nbdkit_error(3)>,
+ L<nbdkit-plugin(3)>,
+diff --git a/docs/nbdkit_debug_hexdiff.3 b/docs/nbdkit_debug_hexdiff.3
+new file mode 100644
+index 00000000..c1fe3540
+--- /dev/null
++++ b/docs/nbdkit_debug_hexdiff.3
+@@ -0,0 +1 @@
++.so man3/nbdkit_debug_hexdump.3
+diff --git a/docs/nbdkit_debug_hexdump.pod b/docs/nbdkit_debug_hexdump.pod
+index 035873a6..274380bf 100644
+--- a/docs/nbdkit_debug_hexdump.pod
++++ b/docs/nbdkit_debug_hexdump.pod
+@@ -1,6 +1,7 @@
+ =head1 NAME
+ 
+-nbdkit_debug_hexdump - display buffer in hexdump format
++nbdkit_debug_hexdump,
++nbdkit_debug_hexdiff - display buffer in hexdump format
+ 
+ =head1 SYNOPSIS
+ 
+@@ -9,11 +10,15 @@ nbdkit_debug_hexdump - display buffer in hexdump format
+  void nbdkit_debug_hexdump (const void *buf, size_t len,
+                             const char *prefix, uint64_t start);
+ 
++ void nbdkit_debug_hexdiff (const void *buf1, const void *buf2,
++                            size_t len,
++                            const char *prefix, uint64_t start);
++
+ =head1 DESCRIPTION
+ 
+-This function displays a buffer of binary data in canonical hexdump
+-format, sending the output to the same place as L<nbdkit_debug(3)>.
+-For example:
++B<nbdkit_debug_hexdump> displays a buffer of binary data in canonical
++hexdump format, sending the output to the same place as
++L<nbdkit_debug(3)>.  For example:
+ 
+  char buf[33] = "12345678123456781234567812345678";
+  nbdkit_debug_hexdump (buf, 32, "data: ", 0);
+@@ -29,6 +34,17 @@ line of output.  (This may be C<NULL> or C<""> for no prefix).
+ An optional C<start> may be given which changes the first offset
+ displayed in the output.
+ 
++B<nbdkit_debug_hexdiff> displays the differences between two binary
++buffers (of the same length).
++
++For rows which are the same in both buffers, the output is the same as
++above.  For rows which are different it shows the first buffer in the
++first row (prefixed with C<->) and the differences in the second
++buffer in the second row (prefixed with C<+>):
++
++ -00000000: 31 32 33 34 35 36 37 38  31 32 33 34 35 36 37 38  |1234567812345678|
++ +00000000:                          39 38 37 36    34 33 32  |        9876 432|
++
+ =head1 LANGUAGE BINDINGS
+ 
+ (There are no language bindings of this function in the current version.)
+@@ -43,6 +59,7 @@ L<nbdkit(1)>,
+ L<nbdkit_debug(3)>,
+ L<nbdkit-plugin(3)>,
+ L<nbdkit-filter(3)>,
++L<nbdkit-evil-filter(1)>,
+ L<nbddump(1)>,
+ L<hexdump(1)>.
+ 
+diff --git a/include/nbdkit-common.h b/include/nbdkit-common.h
+index 8bc16ee3..d23fedb0 100644
+--- a/include/nbdkit-common.h
++++ b/include/nbdkit-common.h
+@@ -131,6 +131,10 @@ NBDKIT_EXTERN_DECL (void, nbdkit_vdebug,
+ NBDKIT_EXTERN_DECL (char *, nbdkit_absolute_path,
+                     (const char *path)
+                     NBDKIT_ATTRIBUTE_NONNULL ((1)));
++NBDKIT_EXTERN_DECL (void, nbdkit_debug_hexdiff,
++                    (const void *buf1, const void *buf2, size_t len,
++                     const char *prefix, uint64_t start)
++                    NBDKIT_ATTRIBUTE_NONNULL ((1, 2)));
+ NBDKIT_EXTERN_DECL (void, nbdkit_debug_hexdump,
+                     (const void *buf, size_t len,
+                      const char *prefix, uint64_t start)
+diff --git a/server/debug.c b/server/debug.c
+index 90ffc600..68c768fe 100644
+--- a/server/debug.c
++++ b/server/debug.c
+@@ -201,12 +201,13 @@ hexdump_set_byte (struct hexdump_line *line, size_t i, uint8_t b)
+ 
+ /* Send the final string to nbdkit_debug. */
+ static inline void
+-hexdump_emit_debug (struct hexdump_line *line, const char *prefix)
++hexdump_emit_debug (struct hexdump_line *line,
++                    const char *prefix, const char *plusminus)
+ {
+   /* Start by splitting up the hex digits into two groups of 8. */
+   line->hex[8*3-1] = '\0';
+-  nbdkit_debug ("%s%s: %s  %s |%s|",
+-                prefix ? : "",
++  nbdkit_debug ("%s%s%s: %s  %s |%s|",
++                prefix ? : "", plusminus ? : "",
+                 line->str_offset, line->hex, &line->hex[8*3], line->chars);
+ }
+ 
+@@ -235,7 +236,7 @@ nbdkit_debug_hexdump (const void *vbuf, size_t len,
+       line.offset++;
+       len--;
+     }
+-    hexdump_emit_debug (&line, prefix);
++    hexdump_emit_debug (&line, prefix, NULL);
+   }
+ 
+   /* Aligned body and unaligned tail. */
+@@ -248,6 +249,70 @@ nbdkit_debug_hexdump (const void *vbuf, size_t len,
+       line.offset++;
+       len--;
+     }
+-    hexdump_emit_debug (&line, prefix);
++    hexdump_emit_debug (&line, prefix, NULL);
++  }
++}
++
++NBDKIT_DLL_PUBLIC void
++nbdkit_debug_hexdiff (const void *vbuf1, const void *vbuf2, size_t len,
++                      const char *prefix, uint64_t start)
++{
++  if (!verbose)
++    return;
++
++  struct hexdump_line line1 = { .offset = start };
++  struct hexdump_line line2 = { .offset = start };
++  const uint8_t *buf1 = vbuf1, *buf2 = vbuf2;
++  uint64_t skip;
++  bool differences;
++  size_t i;
++
++  /* Unaligned head. */
++  if (! IS_ALIGNED (line1.offset, 16)) {
++    hexdump_reset_line (&line1);
++    hexdump_reset_line (&line2);
++    skip = line1.offset % 16;
++    differences = false;
++
++    for (i = skip; i < 16 && len > 0; ++i) {
++      hexdump_set_byte (&line1, i, *buf1);
++      if (*buf1 != *buf2) {
++        differences = true;
++        hexdump_set_byte (&line2, i, *buf2);
++      }
++      buf1++;
++      buf2++;
++      line1.offset++;
++      line2.offset++;
++      len--;
++    }
++    hexdump_emit_debug (&line1, prefix, differences ? "-" : " ");
++    if (differences)
++      hexdump_emit_debug (&line2, prefix, "+");
++  }
++
++  /* Aligned body and unaligned tail. */
++  while (len > 0) {
++    assert (IS_ALIGNED (line1.offset, 16));
++    assert (IS_ALIGNED (line2.offset, 16));
++    hexdump_reset_line (&line1);
++    hexdump_reset_line (&line2);
++    differences = false;
++
++    for (i = 0; i < 16 && len > 0; ++i) {
++      hexdump_set_byte (&line1, i, *buf1);
++      if (*buf1 != *buf2) {
++        differences = true;
++        hexdump_set_byte (&line2, i, *buf2);
++      }
++      buf1++;
++      buf2++;
++      line1.offset++;
++      line2.offset++;
++      len--;
++    }
++    hexdump_emit_debug (&line1, prefix, differences ? "-" : " ");
++    if (differences)
++      hexdump_emit_debug (&line2, prefix, "+");
+   }
+ }
+diff --git a/server/nbdkit.syms b/server/nbdkit.syms
+index 239e6db1..c22356fb 100644
+--- a/server/nbdkit.syms
++++ b/server/nbdkit.syms
+@@ -44,6 +44,7 @@
+     nbdkit_context_get_backend;
+     nbdkit_context_set_next;
+     nbdkit_debug;
++    nbdkit_debug_hexdiff;
+     nbdkit_debug_hexdump;
+     nbdkit_disconnect;
+     nbdkit_error;
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index 759a5237..a887ac75 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -328,6 +328,7 @@ TESTS += \
+ 	test-log-to-file-append.sh \
+ 	test-at-file.sh \
+ 	test-debug-hexdump.sh \
++	test-debug-hexdiff.sh \
+ 	$(NULL)
+ if !IS_WINDOWS
+ TESTS += \
+@@ -359,6 +360,8 @@ EXTRA_DIST += \
+ 	test-export-handshake.sh \
+ 	test-export-handshake-tls.sh \
+ 	test-debug-flags.sh \
++	test-debug-hexdiff.sh \
++	test-debug-hexdiff-plugin.c \
+ 	test-debug-hexdump.sh \
+ 	test-debug-hexdump-plugin.c \
+ 	test-disconnect-tls.sh \
+@@ -538,8 +541,10 @@ test_shutdown_plugin_la_LIBADD = $(IMPORT_LIBRARY_ON_WINDOWS)
+ # So we have to do this and add a dependency.
+ noinst_LTLIBRARIES += \
+ 	test-debug-hexdump-plugin.la \
++	test-debug-hexdiff-plugin.la \
+ 	$(NULL)
+ test-debug-hexdump.sh: test-debug-hexdump-plugin.la
++test-debug-hexdiff.sh: test-debug-hexdiff-plugin.la
+ 
+ test_debug_hexdump_plugin_la_SOURCES = \
+ 	test-debug-hexdump-plugin.c \
+@@ -557,6 +562,22 @@ test_debug_hexdump_plugin_la_LDFLAGS = \
+ 	$(NULL)
+ test_debug_hexdump_plugin_la_LIBADD = $(IMPORT_LIBRARY_ON_WINDOWS)
+ 
++test_debug_hexdiff_plugin_la_SOURCES = \
++	test-debug-hexdiff-plugin.c \
++	$(top_srcdir)/include/nbdkit-plugin.h \
++	$(NULL)
++test_debug_hexdiff_plugin_la_CPPFLAGS = \
++	-I$(top_srcdir)/include \
++	-I$(top_builddir)/include \
++	$(NULL)
++test_debug_hexdiff_plugin_la_CFLAGS = $(WARNINGS_CFLAGS)
++# For use of the -rpath option, see:
++# https://lists.gnu.org/archive/html/libtool/2007-07/msg00067.html
++test_debug_hexdiff_plugin_la_LDFLAGS = \
++	-module -avoid-version -shared $(NO_UNDEFINED_ON_WINDOWS) -rpath /nowhere \
++	$(NULL)
++test_debug_hexdiff_plugin_la_LIBADD = $(IMPORT_LIBRARY_ON_WINDOWS)
++
+ endif HAVE_PLUGINS
+ 
+ # Test the header files can be included on their own.
+diff --git a/tests/test-debug-hexdiff-plugin.c b/tests/test-debug-hexdiff-plugin.c
+new file mode 100755
+index 00000000..89fe0de3
+--- /dev/null
++++ b/tests/test-debug-hexdiff-plugin.c
+@@ -0,0 +1,92 @@
++/* nbdkit
++ * Copyright Red Hat
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are
++ * met:
++ *
++ * * Redistributions of source code must retain the above copyright
++ * notice, this list of conditions and the following disclaimer.
++ *
++ * * Redistributions in binary form must reproduce the above copyright
++ * notice, this list of conditions and the following disclaimer in the
++ * documentation and/or other materials provided with the distribution.
++ *
++ * * Neither the name of Red Hat nor the names of its contributors may be
++ * used to endorse or promote products derived from this software without
++ * specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++ * USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++ * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++/* Plugin for testing nbdkit_debug_hexdiff.  See nbdkit-debug-hexdiff.sh */
++
++#include <config.h>
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <stdint.h>
++#include <string.h>
++
++#define NBDKIT_API_VERSION 2
++#include <nbdkit-plugin.h>
++
++static const uint64_t size = 1024 * 1024;
++static uint8_t data[1024 * 1024];
++
++static void *
++hexdiff_open (int readonly)
++{
++  return NBDKIT_HANDLE_NOT_NEEDED;
++}
++
++static int64_t
++hexdiff_get_size (void *handle)
++{
++  return size;
++}
++
++#define THREAD_MODEL NBDKIT_THREAD_MODEL_PARALLEL
++
++static int
++hexdiff_pread (void *handle, void *buf, uint32_t count, uint64_t offset,
++               uint32_t flags)
++{
++  memcpy (buf, &data[offset], count);
++  return 0;
++}
++
++static int
++hexdiff_pwrite (void *handle, const void *buf, uint32_t count, uint64_t offset,
++                uint32_t flags)
++{
++  /* Show the differences between the existing data and what we are
++   * about to write.
++   */
++  nbdkit_debug_hexdiff (&data[offset], buf, count, "DIFF: ", offset);
++  /* Update the RAM disk. */
++  memcpy (&data[offset], buf, count);
++  return 0;
++}
++
++static struct nbdkit_plugin plugin = {
++  .name              = "hexdiff",
++  .version           = PACKAGE_VERSION,
++  .open              = hexdiff_open,
++  .get_size          = hexdiff_get_size,
++  .pread             = hexdiff_pread,
++  .pwrite            = hexdiff_pwrite,
++};
++
++NBDKIT_REGISTER_PLUGIN (plugin)
+diff --git a/tests/test-debug-hexdiff.sh b/tests/test-debug-hexdiff.sh
+new file mode 100755
+index 00000000..99d0b1ff
+--- /dev/null
++++ b/tests/test-debug-hexdiff.sh
+@@ -0,0 +1,118 @@
++#!/usr/bin/env bash
++# nbdkit
++# Copyright Red Hat
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met:
++#
++# * Redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer.
++#
++# * Redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution.
++#
++# * Neither the name of Red Hat nor the names of its contributors may be
++# used to endorse or promote products derived from this software without
++# specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY RED HAT AND CONTRIBUTORS ''AS IS'' AND
++# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
++# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL RED HAT OR
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
++# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++# SUCH DAMAGE.
++
++# Test nbdkit_debug_hexdiff function.
++#
++# We assume that the tests of nbdkit_debug_hexdump do most of the
++# heavy lifting as the two functions are very similar.  This only
++# tests the different behaviour of hexdiff.
++
++source ./functions.sh
++set -e
++set -x
++set -u
++
++requires_run
++requires_nbdsh_uri
++requires diff --version
++requires $SED --version
++
++plugin=.libs/test-debug-hexdiff-plugin.$SOEXT
++requires test -f $plugin
++
++out=debug-hexdiff.out
++hexout=debug-hexdiff.hexout
++files="$out $hexout"
++rm -f $files
++cleanup_fn rm -f $files
++
++define script <<'EOF'
++import os
++
++# Write zeros over zeroes
++b = bytearray(32)
++h.pwrite(b, 0)
++
++# Write 4 lines over zeroes
++b = b"1234567890abcdef" * 4
++h.pwrite(b, 0)
++
++# Partially overwrite second line
++b = b"56780000"
++h.pwrite(b, 20)
++
++# Partially overwrite third and fourth lines
++b = b"56780000cdef1234555590"
++h.pwrite(b, 36)
++
++EOF
++export script
++
++define expected <<'EOF'
++# Write zeros over zeroes
++ 00000000: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
++ 00000010: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
++
++# Write 4 lines over zeroes
++-00000000: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+++00000000: 31 32 33 34 35 36 37 38  39 30 61 62 63 64 65 66  |1234567890abcdef|
++-00000010: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+++00000010: 31 32 33 34 35 36 37 38  39 30 61 62 63 64 65 66  |1234567890abcdef|
++-00000020: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+++00000020: 31 32 33 34 35 36 37 38  39 30 61 62 63 64 65 66  |1234567890abcdef|
++-00000030: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+++00000030: 31 32 33 34 35 36 37 38  39 30 61 62 63 64 65 66  |1234567890abcdef|
++
++# Partially overwrite second line
++-00000010:             35 36 37 38  39 30 61 62              |    567890ab    |
+++00000010:                          30    30 30              |        0 00    |
++
++# Partially overwrite third and fourth lines
++-00000020:             35 36 37 38  39 30 61 62 63 64 65 66  |    567890abcdef|
+++00000020:                          30    30 30              |        0 00    |
++-00000030: 31 32 33 34 35 36 37 38  39 30                    |1234567890      |
+++00000030:                35 35 35                           |     555        |
++EOF
++
++# Run nbdkit with the plugin and debug enabled.  Capture the full
++# output including stderr so we can find the hexdump output.
++fail=
++nbdkit -f -v $plugin --run 'nbdsh -u "$uri" -c "$script"' >$out 2>&1 || fail=1
++cat $out
++if test "$fail"; then exit 1; fi
++
++# Get the hexdiff lines from the output.
++grep "DIFF: " < $out | $SED 's/.*DIFF: //' > $hexout
++cat $hexout
++
++# Compare it to the expected output (in $expected variable).
++diff -u $hexout <(echo -n "$expected" | grep -v '^#' | grep -v '^$')
+-- 
+2.47.3
+
