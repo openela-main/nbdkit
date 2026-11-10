@@ -1,4 +1,4 @@
-From 305ec1211a8a594f6cb87154ae48edc0c8fb7ece Mon Sep 17 00:00:00 2001
+From c495b7f46b60a8e549327b2444591fe9e3173da0 Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Fri, 3 Apr 2026 13:50:37 +0100
 Subject: [PATCH] cow: Fix offsets when overlay is split
@@ -21,7 +21,6 @@ The error seen is:
 
 Reported-by: Ming Xie
 Fixes: commit eb79a0e0c63ba1884bde02dc884a26aea2fc4324
-(cherry picked from commit c495b7f46b60a8e549327b2444591fe9e3173da0)
 ---
  filters/cow/blk.c      | 18 ++++++++++++------
  tests/test-cow-huge.sh |  4 ++--

@@ -1,11 +1,9 @@
-From f4968119f7b8b01d5b88c2f015bad9b4338480ad Mon Sep 17 00:00:00 2001
+From 6ed71d8709cd03dd9a3c53cba9dd03e5b884031d Mon Sep 17 00:00:00 2001
 From: "Richard W.M. Jones" <rjones@redhat.com>
 Date: Fri, 3 Apr 2026 14:10:51 +0100
 Subject: [PATCH] cow: Make some offset variables const
 
 These variables are not modified so set them to const.
-
-(cherry picked from commit 6ed71d8709cd03dd9a3c53cba9dd03e5b884031d)
 ---
  filters/cow/blk.c | 8 ++++----
  1 file changed, 4 insertions(+), 4 deletions(-)

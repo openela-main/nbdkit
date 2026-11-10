@@ -6,7 +6,7 @@ set -e
 # directory.  Use it like this:
 #   ./copy-patches.sh
 
-rhel_version=10.2
+rhel_version=10.3
 
 # Check we're in the right directory.
 if [ ! -f nbdkit.spec ]; then

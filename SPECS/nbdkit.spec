@@ -51,11 +51,11 @@
 %global verify_tarball_signature 1
 
 # The source directory.
-%global source_directory 1.46-stable
+%global source_directory 1.47-development
 
 Name:           nbdkit
-Version:        1.46.2
-Release:        3%{?dist}
+Version:        1.47.6
+Release:        2%{?dist}
 Summary:        NBD server
 
 License:        BSD-3-Clause
@@ -77,40 +77,13 @@ Source2:        libguestfs.keyring
 Source3:        copy-patches.sh
 
 # Patches come from the upstream repository:
-# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-10.2/
+# https://gitlab.com/nbdkit/nbdkit/-/commits/rhel-10.3/
 
 # Patches.
-Patch0001:     0001-vram-Cast-cl_ulong-to-uint64_t-before-printing.patch
-Patch0002:     0002-server-Add-nbdkit_debug_hexdiff-function.patch
-Patch0003:     0003-checkwrite-Display-differences-if-D-checkwrite.showd.patch
-Patch0004:     0004-docs-nbdkit_debug_hexdump.pod-Document-when-hexdiff-.patch
-Patch0005:     0005-docs-nbdkit_debug_hexdump.pod-Add-a-link-back-to-nbd.patch
-Patch0006:     0006-Add-new-nbdkit_name-function.patch
-Patch0007:     0007-server-test-public.c-Add-process_name-dummy-variable.patch
-Patch0008:     0008-Add-new-nbdkit_timestamp-function.patch
-Patch0009:     0009-log-Use-nbdkit_timestamp.patch
-Patch0010:     0010-docs-nbdkit-plugin.pod-Add-a-link-to-nbdkit_timestam.patch
-Patch0011:     0011-docs-nbdkit_timestamp.pod-Fix-copy-and-paste-error-i.patch
-Patch0012:     0012-todo-Add-item-about-nbdkit_timestamp-on-the-main-thr.patch
-Patch0013:     0013-server-sockets.c-Print-the-actual-bound-addresses-an.patch
-Patch0014:     0014-server-Partially-fix-port-0.patch
-Patch0015:     0015-tests-test-ip-filter.sh-Remove-use-of-pick_unused_po.patch
-Patch0016:     0016-tests-test-ipv4-lo.sh-tests-test-ipv6-lo.sh-Remove-p.patch
-Patch0017:     0017-server-sockets.c-Don-t-crash-if-TCP-IP-selected-with.patch
-Patch0018:     0018-sparse-random-Make-block-size-configurable.patch
-Patch0019:     0019-sparse-random-Clamp-preferred-block-size.patch
-Patch0020:     0020-tests-test-sparse-random-blocksize.sh-Enhance-the-te.patch
-Patch0021:     0021-tests-test-sparse-random-blocksize.sh-Reduce-maximum.patch
-Patch0022:     0022-cache-cow-Prefix-ftruncate-error-with-filter-name.patch
-Patch0023:     0023-cow-Don-t-leak-blk-lock-and-blk-bm-on-error-paths.patch
-Patch0024:     0024-cow-Use-a-vector-to-store-the-overlay-file-descripto.patch
-Patch0025:     0025-cow-Split-out-function-to-create-temporary-files.patch
-Patch0026:     0026-cow-Add-name-of-the-temporary-file-to-debug-output.patch
-Patch0027:     0027-cow-Support-overlays-larger-than-16T-on-ext4.patch
-Patch0028:     0028-cache-cow-Add-prefix-before-more-calls.patch
-Patch0029:     0029-cow-Fix-block-fd-calculation.patch
-Patch0030:     0030-cow-Fix-offsets-when-overlay-is-split.patch
-Patch0031:     0031-cow-Make-some-offset-variables-const.patch
+Patch0001:     0001-cache-cow-Add-prefix-before-more-calls.patch
+Patch0002:     0002-cow-Fix-block-fd-calculation.patch
+Patch0003:     0003-cow-Fix-offsets-when-overlay-is-split.patch
+Patch0004:     0004-cow-Make-some-offset-variables-const.patch
 
 # For automatic RPM Provides generation.
 # See: https://rpm-software-management.github.io/rpm/manual/dependency_generators.html
@@ -1618,9 +1591,16 @@ fi
 
 
 %changelog
-* Fri Apr 03 2026 Richard W.M. Jones <rjones@redhat.com> - 1.46.2-3
-- cow: Support overlays larger than 16T on ext4 + further fixes
-  resolves: RHEL-164229
+* Fri Apr 03 2026 Richard W.M. Jones <rjones@redhat.com> - 1.47.6-2
+- cow: Support overlays larger than 16T on ext4 (further fixes)
+  resolves: RHEL-163983
+
+* Thu Apr 02 2026 Richard W.M. Jones <rjones@redhat.com> - 1.47.6-1
+- Rebase to nbdkit 1.47.6
+  Synchronize spec file with Fedora
+  resolves: RHEL-153362
+- cow: Support overlays larger than 16T on ext4
+  resolves: RHEL-163983
 
 * Mon Feb 09 2026 Richard W.M. Jones <rjones@redhat.com> - 1.46.2-1
 - Rebase to nbdkit 1.46.2
